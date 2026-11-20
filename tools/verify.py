@@ -20,6 +20,7 @@ def main():
             ("build", ["tools/build_plugin.py", "--deploy-test"]),
             ("loader", ["tools/smoke_test.py", "--suite"]),
             ("coexistence", ["tools/two_instance_test.py", "--windowed"]),
+            ("net-loopback", ["tools/net_test.py", "--suite"]),
             ("actors", ["tools/seat_test.py", "--windowed", "--suite"]),
             ("targeting", ["tools/target_test.py", "--suite"]),
             ("controllers", ["tools/controller_test.py", "--suite"]),

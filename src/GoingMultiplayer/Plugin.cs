@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.4.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.5.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -19,14 +19,20 @@ namespace GoingMultiplayer
         private string runId = "manual";
         private bool seatProbe;
         private bool targetProbe;
+        private bool netProbe;
+        private bool netNegative;
+        private string netRole = "host";
+        private int netPort;
         private bool localPrototype;
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.4.0 networking=not_implemented");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.5.0 networking=loopback_test_only");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
             targetProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-probe") >= 0;
+            netProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-probe") >= 0;
+            netNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-negative") >= 0;
             localPrototype = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-local-prototype") >= 0;
             foreach (string argument in Environment.GetCommandLineArgs())
             {
@@ -35,6 +41,10 @@ namespace GoingMultiplayer
                 else if (argument.StartsWith("-gmp-smoke-min-scenes=", StringComparison.Ordinal))
                     smokeMinScenes = Math.Max(1,
                         int.Parse(argument.Substring("-gmp-smoke-min-scenes=".Length)));
+                else if (argument.StartsWith("-gmp-net=", StringComparison.Ordinal))
+                    netRole = argument.Substring("-gmp-net=".Length);
+                else if (argument.StartsWith("-gmp-net-port=", StringComparison.Ordinal))
+                    netPort = int.Parse(argument.Substring("-gmp-net-port=".Length));
             }
             foreach (char character in runId)
                 if (!char.IsLetterOrDigit(character) && character != '-' && character != '_')
@@ -71,6 +81,11 @@ namespace GoingMultiplayer
             {
                 yield return StartCoroutine(RunTargetProbe(
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-negative") >= 0));
+                yield break;
+            }
+            if (netProbe)
+            {
+                yield return StartCoroutine(RunNetProbe());
                 yield break;
             }
             if (!smokeMode) yield break;
@@ -127,6 +142,40 @@ namespace GoingMultiplayer
             }
         }
 
+        private IEnumerator RunNetProbe()
+        {
+            if (netRole != "host" && netRole != "guest")
+            {
+                Report("GMP_NET_EXCEPTION run=" + runId + " invalid role " + netRole);
+                Application.Quit(1);
+                yield break;
+            }
+            if (netPort < 1024 || netPort > 65535)
+            {
+                Report("GMP_NET_EXCEPTION run=" + runId + " invalid port " + netPort);
+                Application.Quit(1);
+                yield break;
+            }
+            IEnumerator probe = NetProbe.Run(this, runId, netRole, netPort, netNegative);
+            while (true)
+            {
+                bool next = false;
+                Exception failure = null;
+                try { next = probe.MoveNext(); }
+                catch (Exception exception) { failure = exception; }
+                if (failure != null)
+                {
+                    Logger.LogError("GMP_NET_EXCEPTION " + failure);
+                    Report("GMP_NET_EXCEPTION run=" + runId + " " + failure.GetType().Name
+                        + ": " + failure.Message);
+                    Application.Quit(1);
+                    yield break;
+                }
+                if (!next) yield break;
+                yield return probe.Current;
+            }
+        }
+
         private static bool HasMethod(Type type, string name)
         {
             foreach (MethodInfo method in type.GetMethods(
@@ -162,7 +211,7 @@ namespace GoingMultiplayer
         internal void Report(string text)
         {
             Logger.LogInfo(text);
-            if (seatProbe || smokeMode || targetProbe)
+            if (seatProbe || smokeMode || targetProbe || netProbe)
                 File.AppendAllText(Path.Combine(BepInEx.Paths.GameRootPath, "gmp-trace-" + runId + ".log"),
                     text + Environment.NewLine);
         }

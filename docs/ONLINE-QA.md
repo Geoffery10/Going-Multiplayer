@@ -51,7 +51,7 @@ redefine correctness. L4 is a field test of the same gates on separate hardware.
 
 ## Observability
 
-Every client writes an immediately flushed JSONL trace with:
+Every client writes immediately flushed structured trace lines with:
 
 - run id, build hash, process id, role (host/guest), session id and epoch;
 - tick and wall-clock time, player id, controlled actor id;
@@ -113,9 +113,15 @@ before and after.
    clients from separate installs.
    Both reached the title screen (`scenes=2`), reported Steam valid and found
    the required hooks, then exited 0. Prefixes and installs were distinct.
-3. **L2 harness.** UDP loopback transport, host/guest bot, JSONL traces, scorer,
-   O1 and O3.
-4. O4, then O5, O6, O7, O8 and O9.
+3. **L2 loopback harness — first gates implemented.**
+   `tools/net_test.py --suite` starts a host and guest, exchanges a session id,
+   assigns ids 1/2, reports presence on both sides, and replicates the guest's
+   scripted movement to the host's remote actor. A mutation that skips applying
+   remote poses must fail the host.
+   Positive run: guest moved 3.07 m over 97 updates, host applied 3.07 m, and
+   the final cross-checked positions matched. Not yet covered: epochs, stale
+   packet rejection, input authority and loss/chaos.
+4. O2, then online O4, then O5–O9.
 
 ## Late validation with a friend
 

@@ -1,18 +1,21 @@
 # Independent-character prototype
 
-This is a single-process integration milestone toward online co-op, not an
-online/co-op release or split-screen implementation.
+This is a local prototype plus a two-process **test-only loopback** milestone,
+not an online/co-op release or split-screen implementation. The loopback
+transport exists only inside test probes and is not a production session.
 
 ## Verified build
 
-Version **0.4.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
+Version **0.5.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
 
 | Check | Result |
 | --- | --- |
-| Tooling/scorer/isolation tests | 25 passed |
+| Tooling/scorer/isolation tests | 33 passed |
 | Production pad-frame mapping | 27 checks passed |
 | Authenticated loader and broken-hook control | Both behaved as expected |
 | Two same-account clients concurrently | Both reached Title, Steam valid, hooks found, exit 0 |
+| Two-client loopback presence/movement | PASS; guest moved 3.07 m, host applied it, positions matched |
+| Loopback remote-apply mutation | Expected FAIL; host applied 0 m |
 | Two independent characters | PASS |
 | Intentionally broken health isolation | Expected FAIL; other checks stayed true |
 | Five independent characters with alternate outfits | PASS |
@@ -54,6 +57,7 @@ and full controller combat have not been verified.
 ```sh
 python tools/build_plugin.py --deploy-test
 python tools/two_instance_test.py --windowed
+python tools/net_test.py --suite
 python tools/seat_test.py --windowed --suite
 python tools/target_test.py --suite
 python -m unittest discover -s tests -v
@@ -81,6 +85,18 @@ both on the same Steam account with rendered windows. Each client must report a
 valid Steam client, the required hooks, and at least the title screen
 (`scenes=2`), then exit 0. The runner records distinct installs and prefixes.
 This proves process/prefix/save coexistence only, not networking.
+
+### Two-client loopback gate
+
+`python tools/net_test.py --suite` starts a host and a guest from the two
+private installs and exchanges presence and player poses over loopback UDP
+through a test-only transport. Each side logs a session id, player ids, update
+count and final local/remote positions. The guest drives scripted movement; the
+host applies the received pose to its remote actor. The scorer cross-checks both
+traces and requires the mutation run (host skips applying poses) to fail.
+
+This is not the production transport, lobby or gameplay sync. It records the
+first verified two-process replication: presence plus position.
 
 ### Enemy-targeting gate
 

@@ -48,6 +48,7 @@ hook discovery and clean exit. Its intentionally broken hook gate must fail.
 ```sh
 python tools/seat_test.py --windowed --suite
 python tools/target_test.py --suite
+python tools/net_test.py --suite
 ```
 
 The bot loads the isolated office save, spawns additional characters, checks
@@ -57,6 +58,8 @@ intentionally broken health accessor and five-character spawning.
 The targeting suite enters a dungeon through the game's own entrance trigger and
 checks that a second actor is a valid enemy target and that the nearer actor is
 selected. It also records the game's native target stickiness.
+The loopback suite runs two real clients, assigns a session and player ids, and
+replicates the guest's movement to the host. Its remote-apply mutation must fail.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
 
 ## Two copies at once
