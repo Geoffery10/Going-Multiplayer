@@ -3,8 +3,9 @@
 Co-op mod research and development for Going Under.
 
 **Status (2026-11-20): experimental local actors plus two-client loopback
-networking, enemy targeting and native enemy-movement mirroring (v0.8.1).
-Not a playable online co-op release.**
+networking, enemy targeting and native enemy-movement mirroring (v0.9.0).
+Combat replication is in progress and does not yet pass. Not a playable online
+co-op release.**
 
 ## Project status
 
@@ -18,6 +19,7 @@ Not a playable online co-op release.**
 | Test-only networking | UDP loopback session/player ids, pose replication and packet rejection passed between two real clients. Guest movement of 3.066 m matched the host's remote actor; stale, wrong-epoch and host-id-claim packets were rejected. |
 | Network enemy target mirror (O4a) | Native host acquisition of P2, a distance-swap control and guest target mirroring passed. Both intentional-failure controls passed: bypassing the guest reacquisition veto or omitting target application produced the expected mismatch. This is one inactive enemy mirror, not general AI or combat replication. |
 | Native host enemy movement (O4b) | One authored CubicleGroundBot moved 3.71 m under its native brain, with 102 matching guest pose samples and zero measured freeze drift. Mirror entry guards and omitted-pose/enabled-guest-AI mutation controls passed. This is one fixture, not general enemy or combat support. |
+| Combat replication (O4c) | **Not passing.** Exactly-once health ledger verified with 16 production checks and mutation scorers, but the host-side native attack fixture has not produced a hit yet. See [the combat notes](docs/O4C-COMBAT.md). |
 
 The loopback suite passed its positive gate and three intentional-failure controls
 (disabled pose application, accepted stale state and accepted host-id claims).
@@ -26,10 +28,12 @@ replicates guest poses, not host-simulated guest input.
 
 ### Verification scope
 
-- **58 Python tooling/scorer tests** and **27 production input-mapping checks passed**.
-- **v0.8.1 full serial regression passed:** startup skipping, loader, coexistence, loopback
-  networking, local actors, local targeting, O4a network targeting and controller
-  routing plus O4b native enemy movement, including their intentional-failure controls.
+- **63 Python tooling/scorer tests** pass, plus **27 production input-mapping
+  checks** (source unchanged since they passed).
+- **Last full serial regression (v0.8.1) passed:** startup skipping, loader,
+  coexistence, loopback networking, local actors, local targeting, O4a network
+  targeting, O4b native enemy movement and controller routing, including their
+  intentional-failure controls. It has not been rerun since O4c work began.
 - Earlier attempts hit lifecycle timeouts. Those remain recorded failures;
   the final pass does not establish that their unknown root cause is fixed.
 - Physical controllers are **not required**. Tests use scripted in-game
@@ -39,8 +43,9 @@ replicates guest poses, not host-simulated guest input.
 
 - Investigate intermittent native startup/shutdown hangs in the two-client harness;
   a PASS trace does not override a failed or timed-out process exit.
-- Generalize host-only enemy AI beyond the tested fixture; replicate native
-  attacks and target-attributed damage across clients.
+- Finish O4c: get a genuine native host attack and replicate its target-attributed
+  damage exactly once; the current attack fixture throws on unconfigured nodes.
+- Generalize host-only enemy AI beyond the tested fixture.
 - Host-authoritative input, combat, inventory, loot and currency.
 - Down/revive, party wipes, shared dungeon/floor identity and save persistence.
 - Remote animation, per-player HUD and camera work; local split-screen and
@@ -48,8 +53,8 @@ replicates guest poses, not host-simulated guest input.
 - Disconnect/reconnect, packet loss/jitter/reordering and soak tests.
 - Steam transport/lobbies, multi-machine validation and networked 4+ player scale.
 
-**Next milestone:** native attack/damage attribution and replication, then
-broader enemy coverage and network-chaos tests.
+**Next milestone:** complete O4c native attack/damage replication, then broader
+enemy coverage and network-chaos tests.
 Full input authority (O2) remains incomplete.
 
 ## Target
