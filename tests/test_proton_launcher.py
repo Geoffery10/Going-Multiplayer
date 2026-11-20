@@ -26,6 +26,9 @@ class ProtonLauncherTests(unittest.TestCase):
                  patch.object(launch_proton, "stage_runner", return_value=root / "runner"), \
                  patch.dict(os.environ, DISPLAY=":99", XAUTHORITY=str(authority)):
                 folder, args = launch_proton.command("test", root / "proton", ["-gmp-smoke"])
+                custom = root / "project/local/test-installs/a"
+                folder2, args2 = launch_proton.command("test-a", root / "proton", ["-gmp-smoke"],
+                                                       install=custom)
                 _, windowed = launch_proton.command("test-visible", root / "proton", [], windowed=True)
             self.assertNotIn("--unshare-net", args)
             self.assertIn("--ro-bind", args)
@@ -34,6 +37,8 @@ class ProtonLauncherTests(unittest.TestCase):
             self.assertEqual(args[args.index("STEAM_COMPAT_DATA_PATH") + 1],
                              str(root / "runtime/profiles/test/compatdata"))
             self.assertIn(str(root / "project/local/test-install/Going Under.exe"), args)
+            self.assertIn(str(custom / "Going Under.exe"), args2)
+            self.assertNotIn(str(root / "project/local/test-install/Going Under.exe"), args2)
             self.assertNotIn(str(home), args)
             self.assertEqual(folder, root / "project/local/profiles/test")
             self.assertIn("-nographics", args)

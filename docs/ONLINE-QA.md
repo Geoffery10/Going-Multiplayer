@@ -42,8 +42,12 @@ redefine correctness. L4 is a field test of the same gates on separate hardware.
   initialization. Resource use is measured before claiming any larger scale.
 - Two clients only. Do not add a third or fourth player, or capacity claims,
   until the late-development scale phase.
-- A test starts only after the two-instance spike has shown both copies can
-  authenticate, load and exit concurrently with isolated saves.
+- The two-instance spike passed: two rendered copies on the same Steam account
+  reached the title screen concurrently, each from its own install and Proton
+  prefix, and exited cleanly. Both traces reported Steam valid, hooks found and
+  two scenes loaded.
+- Two copies use separate installs, prefixes, homes, logs and save folders.
+  The owner's install is hashed unchanged after each run.
 
 ## Observability
 
@@ -104,8 +108,11 @@ before and after.
    just because P2 is closer. This is the O4 oracle.
    Dungeon entry is automated through the game's own office entrance trigger;
    no human has to walk to the elevator.
-2. **Two-instance spike.** Prove two same-account copies coexist and keep saves
-   and processes separate.
+2. **Two-instance spike — implemented and passed.**
+   `tools/two_instance_test.py --windowed` starts two rendered same-account
+   clients from separate installs.
+   Both reached the title screen (`scenes=2`), reported Steam valid and found
+   the required hooks, then exited 0. Prefixes and installs were distinct.
 3. **L2 harness.** UDP loopback transport, host/guest bot, JSONL traces, scorer,
    O1 and O3.
 4. O4, then O5, O6, O7, O8 and O9.

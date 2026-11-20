@@ -12,6 +12,7 @@ Version **0.4.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
 | Tooling/scorer/isolation tests | 25 passed |
 | Production pad-frame mapping | 27 checks passed |
 | Authenticated loader and broken-hook control | Both behaved as expected |
+| Two same-account clients concurrently | Both reached Title, Steam valid, hooks found, exit 0 |
 | Two independent characters | PASS |
 | Intentionally broken health isolation | Expected FAIL; other checks stayed true |
 | Five independent characters with alternate outfits | PASS |
@@ -52,6 +53,7 @@ and full controller combat have not been verified.
 
 ```sh
 python tools/build_plugin.py --deploy-test
+python tools/two_instance_test.py --windowed
 python tools/seat_test.py --windowed --suite
 python tools/target_test.py --suite
 python -m unittest discover -s tests -v
@@ -70,6 +72,15 @@ It checks:
 7. An active animated actor and alternate material/texture, with P1's material
    and costume unchanged.
 8. A unique run result, a clean expected exit and an intentional health failure.
+
+### Two-client coexistence
+
+`python tools/two_instance_test.py --windowed` creates two private install copies
+under `local/test-installs/`, gives each its own Proton prefix/home and launches
+both on the same Steam account with rendered windows. Each client must report a
+valid Steam client, the required hooks, and at least the title screen
+(`scenes=2`), then exit 0. The runner records distinct installs and prefixes.
+This proves process/prefix/save coexistence only, not networking.
 
 ### Enemy-targeting gate
 

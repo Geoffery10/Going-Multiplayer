@@ -15,6 +15,7 @@ namespace GoingMultiplayer
         private int sceneCount;
         private bool hooksFound;
         private bool smokeMode;
+        private int smokeMinScenes = 1;
         private string runId = "manual";
         private bool seatProbe;
         private bool targetProbe;
@@ -28,8 +29,13 @@ namespace GoingMultiplayer
             targetProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-probe") >= 0;
             localPrototype = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-local-prototype") >= 0;
             foreach (string argument in Environment.GetCommandLineArgs())
+            {
                 if (argument.StartsWith("-gmp-run-id=", StringComparison.Ordinal))
                     runId = argument.Substring("-gmp-run-id=".Length);
+                else if (argument.StartsWith("-gmp-smoke-min-scenes=", StringComparison.Ordinal))
+                    smokeMinScenes = Math.Max(1,
+                        int.Parse(argument.Substring("-gmp-smoke-min-scenes=".Length)));
+            }
             foreach (char character in runId)
                 if (!char.IsLetterOrDigit(character) && character != '-' && character != '_')
                     throw new ArgumentException("Invalid test run identifier");
@@ -68,11 +74,11 @@ namespace GoingMultiplayer
                 yield break;
             }
             if (!smokeMode) yield break;
-            float deadline = Time.realtimeSinceStartup + 20f;
+            float deadline = Time.realtimeSinceStartup + 30f;
             while (Time.realtimeSinceStartup < deadline
-                && (!Steamworks.SteamClient.IsValid || sceneCount == 0))
+                && (!Steamworks.SteamClient.IsValid || sceneCount < smokeMinScenes))
                 yield return null;
-            bool passed = hooksFound && Steamworks.SteamClient.IsValid && sceneCount > 0;
+            bool passed = hooksFound && Steamworks.SteamClient.IsValid && sceneCount >= smokeMinScenes;
             Report("GMP_SMOKE_RESULT " + (passed ? "PASS" : "FAIL")
                 + " run=" + runId + " hooks=" + hooksFound + " steam=" + Steamworks.SteamClient.IsValid
                 + " scenes=" + sceneCount);

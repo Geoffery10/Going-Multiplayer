@@ -59,6 +59,15 @@ checks that a second actor is a valid enemy target and that the nearer actor is
 selected. It also records the game's native target stickiness.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
 
+## Two copies at once
+
+```sh
+python tools/two_instance_test.py --windowed
+```
+
+Starts two isolated clients on the same Steam account and verifies both reach the
+title screen concurrently. This is a startup/isolation spike, not networking.
+
 ## Try P2 with a controller
 
 ```sh

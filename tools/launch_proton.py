@@ -36,10 +36,11 @@ def stage_runner(proton):
     return stage
 
 
-def command(profile, proton, game_args, windowed=False):
+def command(profile, proton, game_args, windowed=False, install=None):
     if not profile or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for c in profile):
         raise ValueError("Invalid profile name")
     proton = proton.resolve()
+    install = (install or (ROOT / "local/test-install")).resolve()
     steam = (Path.home() / ".local/share/Steam").resolve()
     steam_dot = Path.home() / ".steam"
     authority = Path(os.environ.get("XAUTHORITY", "/nonexistent"))
@@ -72,7 +73,7 @@ def command(profile, proton, game_args, windowed=False):
         "--unsetenv", "DBUS_SESSION_BUS_ADDRESS",
         "--setenv", "STEAM_COMPAT_CLIENT_INSTALL_PATH", str(steam),
         "--setenv", "STEAM_COMPAT_DATA_PATH", str(runtime / "compatdata"),
-        "--setenv", "STEAM_COMPAT_INSTALL_PATH", str(ROOT / "local/test-install"),
+        "--setenv", "STEAM_COMPAT_INSTALL_PATH", str(install),
         "--setenv", "STEAM_COMPAT_APP_ID", "1154810",
         "--setenv", "SteamAppId", "1154810",
         "--setenv", "SteamGameId", "1154810",
@@ -82,9 +83,9 @@ def command(profile, proton, game_args, windowed=False):
         "--setenv", "PROTON_NO_ESYNC", "1",
         "--setenv", "PROTON_NO_FSYNC", "1",
         "--setenv", "WINEDLLOVERRIDES", "winhttp=n,b;mscoree,mshtml=",
-        "--chdir", str(ROOT / "local/test-install"),
+        "--chdir", str(install),
         sys.executable, str(ROOT / "tools/proton_entry.py"), str(stage / "proton"),
-        str(ROOT / "local/test-install/Going Under.exe"),
+        str(install / "Going Under.exe"),
         *(["-screen-fullscreen", "0", "-screen-width", "1280", "-screen-height", "720"]
           if windowed else ["-batchmode", "-nographics"]),
         "-logFile", str(folder / "logs/unity.log"),
