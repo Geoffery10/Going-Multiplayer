@@ -64,6 +64,27 @@ def command(profile, timeout, wine_debug="-all", display=False):
     return folder, args
 
 
+def snapshot_owned(token, proc_root=Path("/proc")):
+    """Diagnose only this launch's processes, without recording environments or command lines."""
+    marker = ("GMP_LAUNCH_TOKEN=" + token).encode()
+    processes = []
+    for entry in proc_root.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            if marker not in (entry / "environ").read_bytes().split(b"\0"):
+                continue
+            status = dict(line.split(":", 1) for line in (entry / "status").read_text().splitlines()
+                          if ":" in line)
+            processes.append(dict(pid=int(entry.name), name=status.get("Name", "").strip(),
+                                  parent=status.get("PPid", "").strip(),
+                                  state=status.get("State", "").strip(),
+                                  wait_channel=(entry / "wchan").read_text().strip()))
+        except (FileNotFoundError, ProcessLookupError, PermissionError):
+            pass
+    return sorted(processes, key=lambda process: process["pid"])
+
+
 def cleanup_owned(token, proc_root=Path("/proc")):
     marker = ("GMP_LAUNCH_TOKEN=" + token).encode()
     stopped = 0

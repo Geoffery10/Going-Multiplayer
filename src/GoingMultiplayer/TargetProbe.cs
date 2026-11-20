@@ -230,7 +230,7 @@ namespace GoingMultiplayer
             Application.Quit(expected && !negative ? 0 : 1);
         }
 
-        private static GameObject FindEnemyPrefab(Room room)
+        internal static GameObject FindEnemyPrefab(Room room, string prefabName = null)
         {
             DungeonSettings settings = DungeonManager.CURRENT_SETTINGS;
             if (settings)
@@ -245,7 +245,8 @@ namespace GoingMultiplayer
                         GameObject candidate = data.GetPrefab(room);
                         if (!candidate) continue;
                         Enemy enemy = candidate.GetComponent<Enemy>();
-                        if (enemy && !enemy.passive) return candidate;
+                        if (enemy && !enemy.passive
+                            && (prefabName == null || candidate.name == prefabName)) return candidate;
                     }
                 }
             }

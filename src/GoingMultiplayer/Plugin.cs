@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.6.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.7.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -20,6 +20,7 @@ namespace GoingMultiplayer
         private bool seatProbe;
         private bool targetProbe;
         private bool netProbe;
+        private bool netAiProbe;
         private bool netNegative;
         private bool netStaleNegative;
         private bool netAuthorityNegative;
@@ -29,11 +30,12 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.6.0 networking=loopback_test_only");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.7.0 networking=loopback_test_only");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
             targetProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-probe") >= 0;
             netProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-probe") >= 0;
+            netAiProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-ai-probe") >= 0;
             netNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-negative") >= 0;
             netStaleNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-stale-negative") >= 0;
             netAuthorityNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-authority-negative") >= 0;
@@ -87,7 +89,7 @@ namespace GoingMultiplayer
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-negative") >= 0));
                 yield break;
             }
-            if (netProbe)
+            if (netProbe || netAiProbe)
             {
                 yield return StartCoroutine(RunNetProbe());
                 yield break;
@@ -160,8 +162,12 @@ namespace GoingMultiplayer
                 Application.Quit(1);
                 yield break;
             }
-            IEnumerator probe = NetProbe.Run(this, runId, netRole, netPort, netNegative,
-                netStaleNegative, netAuthorityNegative);
+            IEnumerator probe = netAiProbe
+                ? NetAiProbe.Run(this, runId, netRole, netPort,
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-ai-negative") >= 0,
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-target-negative") >= 0)
+                : NetProbe.Run(this, runId, netRole, netPort, netNegative,
+                    netStaleNegative, netAuthorityNegative);
             while (true)
             {
                 bool next = false;
@@ -216,7 +222,7 @@ namespace GoingMultiplayer
         internal void Report(string text)
         {
             Logger.LogInfo(text);
-            if (seatProbe || smokeMode || targetProbe || netProbe)
+            if (seatProbe || smokeMode || targetProbe || netProbe || netAiProbe)
                 File.AppendAllText(Path.Combine(BepInEx.Paths.GameRootPath, "gmp-trace-" + runId + ".log"),
                     text + Environment.NewLine);
         }

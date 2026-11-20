@@ -1,6 +1,8 @@
 # Two-player online testing strategy
 
-Status: plan. No online transport, session or replication exists yet.
+Status: L1 local-actor gates and the first L2 loopback session/movement/packet
+rejection gates have passed. This is a development strategy, not evidence of
+playable online co-op; production transport and shared gameplay remain unfinished.
 
 Scope for now: **one owned game install, one Steam account, two players**.
 Four-player scale, Steam lobbies and a second account are deliberately deferred.
@@ -123,7 +125,13 @@ before and after.
    sequence, a wrong epoch and a guest packet claiming host id; each has its own
    mutation that must fail.
    Not yet covered: loss/chaos, scene/floor epochs, remote animation, combat.
-4. O2, then online O4, then O5–O9.
+4. **O4a targeting mirror — implemented and passed.** The positive gate and
+   both mutation controls passed on v0.7.0. See
+   [the scoped scenario, results and mutation controls](NETWORK-AI.md).
+   The corrected v0.7.0 build also passed the full expanded serial regression;
+   earlier lifecycle timeouts remain known flakiness, not silently retried passes.
+   Full O2 input authority remains incomplete: rejecting host-id claims is not
+   host simulation of guest input. Complete online O4 and O2, then O5–O9.
 
 ## Late validation with a friend
 
@@ -141,6 +149,6 @@ small and the result comparable with L2 evidence.
 
 ## Not claimed
 
-Nothing in this plan is evidence of online play. Until L2 gates pass with two
-real clients, and L3/L4 pass later, the mod has no verified multiplayer
-functionality.
+The recorded L2 gates demonstrate test-only loopback functionality between two
+real clients, not internet play or shared dungeon gameplay. L3 Steam transport,
+L4 multi-machine validation and the remaining gameplay gates have not passed.

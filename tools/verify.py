@@ -23,6 +23,7 @@ def main():
             ("net-loopback", ["tools/net_test.py", "--suite"]),
             ("actors", ["tools/seat_test.py", "--windowed", "--suite"]),
             ("targeting", ["tools/target_test.py", "--suite"]),
+            ("net-ai-targeting", ["tools/net_ai_test.py", "--suite"]),
             ("controllers", ["tools/controller_test.py", "--suite"]),
         ]
     results = []

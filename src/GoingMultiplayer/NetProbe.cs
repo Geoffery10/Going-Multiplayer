@@ -233,7 +233,7 @@ namespace GoingMultiplayer
             Application.Quit(pass ? 0 : 1);
         }
 
-        private static IEnumerator LoadOffice(Plugin plugin)
+        internal static IEnumerator LoadOffice(Plugin plugin)
         {
             plugin.Report("GMP_NET_STAGE wait_for_title");
             float deadline = Time.realtimeSinceStartup + 90f;

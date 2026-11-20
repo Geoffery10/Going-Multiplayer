@@ -14,7 +14,7 @@ import subprocess
 import time
 import uuid
 
-from launch_isolated import ROOT, RUNTIME, cleanup_owned
+from launch_isolated import ROOT, RUNTIME, cleanup_owned, snapshot_owned
 from launch_proton import command, DEFAULT_PROTON
 
 INSTALL_ROOT = ROOT / "local/test-installs"
@@ -78,6 +78,11 @@ def wait_client(client, deadline):
         code = process.wait(timeout=remaining)
     except subprocess.TimeoutExpired:
         timed_out = True
+        # Capture before cleanup: a PASS trace can still precede a native
+        # shutdown hang. It must remain a timeout, not be promoted to success.
+        snapshot = snapshot_owned(client["token"])
+        (client["folder"] / "logs/timeout-processes.json").write_text(
+            json.dumps(snapshot, indent=2) + "\n")
         os_kill_group(process.pid)
         code = process.wait()
     cleaned = cleanup_owned(client["token"])

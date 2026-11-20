@@ -125,8 +125,8 @@ def free_port():
         probe.close()
 
 
-def start_client(profile, install, proton, role, port, run_id, negative):
-    arguments = ["-gmp-net-probe", "-gmp-net=" + role,
+def start_client(profile, install, proton, role, port, run_id, negative, probe_args=None):
+    arguments = (probe_args if probe_args is not None else ["-gmp-net-probe"]) + ["-gmp-net=" + role,
                  "-gmp-net-port=" + str(port), "-gmp-run-id=" + run_id]
     if negative:
         arguments.append(FLAGS[negative])
