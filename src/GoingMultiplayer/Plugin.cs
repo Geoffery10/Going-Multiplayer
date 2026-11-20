@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.7.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.8.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -21,6 +21,7 @@ namespace GoingMultiplayer
         private bool targetProbe;
         private bool netProbe;
         private bool netAiProbe;
+        private bool netBrainProbe;
         private bool netNegative;
         private bool netStaleNegative;
         private bool netAuthorityNegative;
@@ -30,12 +31,14 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.7.0 networking=loopback_test_only");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.8.0 networking=loopback_test_only");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
             targetProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-probe") >= 0;
             netProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-probe") >= 0;
             netAiProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-ai-probe") >= 0;
+            netBrainProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-brain-probe") >= 0;
+            netAiProbe |= netBrainProbe;
             netNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-negative") >= 0;
             netStaleNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-stale-negative") >= 0;
             netAuthorityNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-authority-negative") >= 0;
@@ -165,7 +168,10 @@ namespace GoingMultiplayer
             IEnumerator probe = netAiProbe
                 ? NetAiProbe.Run(this, runId, netRole, netPort,
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-ai-negative") >= 0,
-                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-target-negative") >= 0)
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-target-negative") >= 0,
+                    netBrainProbe,
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-pose-negative") >= 0,
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-sim-negative") >= 0)
                 : NetProbe.Run(this, runId, netRole, netPort, netNegative,
                     netStaleNegative, netAuthorityNegative);
             while (true)

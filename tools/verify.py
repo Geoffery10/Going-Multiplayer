@@ -24,6 +24,7 @@ def main():
             ("actors", ["tools/seat_test.py", "--windowed", "--suite"]),
             ("targeting", ["tools/target_test.py", "--suite"]),
             ("net-ai-targeting", ["tools/net_ai_test.py", "--suite"]),
+            ("net-ai-movement", ["tools/net_ai_test.py", "--brain", "--suite"]),
             ("controllers", ["tools/controller_test.py", "--suite"]),
         ]
     results = []

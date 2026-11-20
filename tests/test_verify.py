@@ -35,14 +35,16 @@ class VerificationRunnerTests(unittest.TestCase):
         self.assertEqual(len(calls), 5)
 
     def test_expanded_serial_order_includes_network_ai(self):
-        code, summary, calls = self.run_fixture(True, [0] * 10)
+        code, summary, calls = self.run_fixture(True, [0] * 11)
         self.assertEqual(code, 0)
         self.assertTrue(summary["passed"])
         self.assertEqual([stage["stage"] for stage in summary["stages"]],
                          ["tooling", "pad-mapping", "build", "loader", "coexistence",
-                          "net-loopback", "actors", "targeting", "net-ai-targeting", "controllers"])
-        self.assertEqual(len(calls), 10)
+                          "net-loopback", "actors", "targeting", "net-ai-targeting",
+                          "net-ai-movement", "controllers"])
+        self.assertEqual(len(calls), 11)
         self.assertEqual(calls[8].args[0][1:], ["tools/net_ai_test.py", "--suite"])
+        self.assertEqual(calls[9].args[0][1:], ["tools/net_ai_test.py", "--brain", "--suite"])
 
     def test_default_does_not_launch_or_build_the_game(self):
         code, summary, calls = self.run_fixture(False, [0, 0])

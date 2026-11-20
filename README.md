@@ -3,7 +3,8 @@
 Co-op mod research and development for Going Under.
 
 **Status (2026-11-20): experimental local actors plus two-client loopback
-networking and enemy-target mirror tests (v0.7.0). Not a playable online co-op release.**
+networking, enemy targeting and native enemy-movement mirroring (v0.8.0).
+Not a playable online co-op release.**
 
 ## Project status
 
@@ -16,6 +17,7 @@ networking and enemy-target mirror tests (v0.7.0). Not a playable online co-op r
 | Two real clients | Two isolated copies reached Title concurrently on one Steam account with valid authentication. |
 | Test-only networking | UDP loopback session/player ids, pose replication and packet rejection passed between two real clients. Guest movement of 3.066 m matched the host's remote actor; stale, wrong-epoch and host-id-claim packets were rejected. |
 | Network enemy target mirror (O4a) | Native host acquisition of P2, a distance-swap control and guest target mirroring passed. Both intentional-failure controls passed: bypassing the guest reacquisition veto or omitting target application produced the expected mismatch. This is one inactive enemy mirror, not general AI or combat replication. |
+| Native host enemy movement (O4b) | One authored CubicleGroundBot moved 3.71 m under its native brain, with 102 matching guest pose samples and zero measured freeze drift. Mirror entry guards and omitted-pose/enabled-guest-AI mutation controls passed. This is one fixture, not general enemy or combat support. |
 
 The loopback suite passed its positive gate and three intentional-failure controls
 (disabled pose application, accepted stale state and accepted host-id claims).
@@ -24,20 +26,21 @@ replicates guest poses, not host-simulated guest input.
 
 ### Verification scope
 
-- **49 Python tooling/scorer tests** and **27 production input-mapping checks passed**.
-- **v0.7.0 full serial regression passed:** loader, coexistence, loopback
+- **55 Python tooling/scorer tests** and **27 production input-mapping checks passed**.
+- **v0.8.0 full serial regression passed:** loader, coexistence, loopback
   networking, local actors, local targeting, O4a network targeting and controller
-  routing, including their intentional-failure controls.
+  routing plus O4b native enemy movement, including their intentional-failure controls.
 - Earlier attempts hit lifecycle timeouts. Those remain recorded failures;
   the final pass does not establish that their unknown root cause is fixed.
-- No physical pads were detected in the final controller run; it covered
-  scripted snapshots. The earlier two-device ownership result is historical.
+- Physical controllers are **not required**. Tests use scripted in-game
+  snapshots; hardware counts are informational. The final run detected no pads.
 
 ### Remaining work
 
 - Investigate intermittent native startup/shutdown hangs in the two-client harness;
   a PASS trace does not override a failed or timed-out process exit.
-- Host-only enemy AI and replicated targeting/damage across clients.
+- Generalize host-only enemy AI beyond the tested fixture; replicate native
+  attacks and target-attributed damage across clients.
 - Host-authoritative input, combat, inventory, loot and currency.
 - Down/revive, party wipes, shared dungeon/floor identity and save persistence.
 - Remote animation, per-player HUD and camera work; local split-screen and
@@ -45,8 +48,8 @@ replicates guest poses, not host-simulated guest input.
 - Disconnect/reconnect, packet loss/jitter/reordering and soak tests.
 - Steam transport/lobbies, multi-machine validation and networked 4+ player scale.
 
-**Next milestone:** extend the O4a target mirror to native host enemy-brain
-simulation and replicated movement/damage, then network-chaos coverage.
+**Next milestone:** native attack/damage attribution and replication, then
+broader enemy coverage and network-chaos tests.
 Full input authority (O2) remains incomplete.
 
 ## Target
@@ -98,6 +101,7 @@ python tools/target_test.py --suite
 python tools/controller_test.py --suite
 python tools/net_test.py --suite
 python tools/net_ai_test.py --suite
+python tools/net_ai_test.py --brain --suite
 ```
 
 The bot loads the isolated office save, spawns additional characters, checks
@@ -113,10 +117,12 @@ guest's movement to the host. Its stale, authority and remote-apply mutations
 must each fail.
 The O4a suite tests native host enemy acquisition and a guarded guest target
 mirror; see [its narrow scope and controls](docs/NETWORK-AI.md).
+The `--brain` suite adds spawn-time entry guards, a collision-fixture fingerprint,
+native host movement, per-sequence pose agreement and a two-second frozen-mirror gate.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
 
 To run the expanded regression serially (build, loader, coexistence, networking,
-actors, local/network targeting and controllers):
+actors, local/network targeting, native enemy movement and controllers):
 
 ```sh
 python tools/verify.py --integration

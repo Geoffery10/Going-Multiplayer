@@ -1,7 +1,7 @@
 # Two-player online testing strategy
 
 Status: L1 local-actor gates and the first L2 loopback session/movement/packet
-rejection gates have passed. This is a development strategy, not evidence of
+rejection and scoped native enemy-movement gates have passed. This is a development strategy, not evidence of
 playable online co-op; production transport and shared gameplay remain unfinished.
 
 Scope for now: **one owned game install, one Steam account, two players**.
@@ -130,6 +130,12 @@ before and after.
    [the scoped scenario, results and mutation controls](NETWORK-AI.md).
    The corrected v0.7.0 build also passed the full expanded serial regression;
    earlier lifecycle timeouts remain known flakiness, not silently retried passes.
+5. **O4b native host enemy movement — implemented and passed.**
+   `tools/net_ai_test.py --brain --suite` adds guarded mirror creation, matching
+   collision-fixture metadata and sequenced movement samples for one authored
+   CubicleGroundBot. Omitted poses and enabled guest AI each fail as intended.
+   All 11 serial regression stages passed on v0.8.0, with no physical controllers.
+   Native attack/damage attribution and replication are next; full O4 is not complete.
    Full O2 input authority remains incomplete: rejecting host-id claims is not
    host simulation of guest input. Complete online O4 and O2, then O5–O9.
 
