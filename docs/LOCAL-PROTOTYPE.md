@@ -205,7 +205,8 @@ python tools/controller_test.py --suite
 
 ## Not implemented or not established
 
-- Online transport, Steam lobbies/invites or multi-machine synchronization.
+- Production online transport, Steam lobbies/invites or multi-machine
+  synchronization. The loopback transport is test-only.
 - Assignment for more than the prototype P2 seat, or separate cameras/split-screen.
 - Physical button-press automation or a verified full controller combat run.
 - Full combat correctness, friendly-fire rules, downed/revive and party wipes.
