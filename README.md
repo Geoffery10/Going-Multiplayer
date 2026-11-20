@@ -2,7 +2,46 @@
 
 Co-op mod research and development for Going Under.
 
-**Status: experimental local second-character prototype. Online co-op is not implemented.**
+**Status (2026-11-20): experimental local actors plus two-client loopback
+networking tests (v0.6.0). Not a playable online co-op release.**
+
+## Project status
+
+| Area | Verified progress |
+| --- | --- |
+| Loader and isolation | BepInEx loads under Proton with normal Steam authentication; tests use private installs, profiles and saves. Original 207 game files hashed unchanged in recorded integrity checks. |
+| Local actors | Two- and five-character gates passed: independent data, health, inventory and input; native pickup and movement; distinct outfits. Five local actors do not prove five networked players. |
+| P2 controller | Exclusive Rewired gamepad assignment and restoration passed with two detected compatible pads; 27 production input-mapping checks passed. Physical button presses were not tested. |
+| Local enemy targeting | Dungeon-entry and targeting gates passed: enemies can acquire P2 and reacquire the nearer actor. Native aggro sticks to an existing valid target; a co-op retargeting policy is still undecided. |
+| Two real clients | Two isolated copies reached Title concurrently on one Steam account with valid authentication. |
+| Test-only networking | UDP loopback session/player ids, pose replication and packet rejection passed between two real clients. Guest movement of 3.066 m matched the host's remote actor; stale, wrong-epoch and host-id-claim packets were rejected. |
+
+The loopback suite passed its positive gate and three intentional-failure controls
+(disabled pose application, accepted stale state and accepted host-id claims).
+These checks **do not establish full host-authoritative gameplay**: the probe
+replicates guest poses, not host-simulated guest input.
+
+### Verification scope
+
+- **35 Python tooling/scorer tests passed**, rerun for this status update.
+- The last complete combined integration pass was **v0.3.0**, covering loader,
+  local actors and controllers. Later targeting, coexistence and v0.6.0 loopback
+  suites passed separately; the expanded full regression has not been rerun.
+- Real-game results above are recorded prior runs, not new game launches for
+  this documentation update.
+
+### Remaining work
+
+- Host-only enemy AI and replicated targeting/damage across clients.
+- Host-authoritative input, combat, inventory, loot and currency.
+- Down/revive, party wipes, shared dungeon/floor identity and save persistence.
+- Remote animation, per-player HUD and camera work; local split-screen and
+  controller assignment for four or more seats.
+- Disconnect/reconnect, packet loss/jitter/reordering and soak tests.
+- Steam transport/lobbies, multi-machine validation and networked 4+ player scale.
+
+**Next milestone:** two-client enemy targeting and host-only AI (O4), then
+network-chaos coverage. Full input authority (O2) remains incomplete.
 
 ## Target
 
@@ -27,6 +66,8 @@ and must never be distributed.
 release. Its default mode is diagnostic. The opt-in local prototype adds a second
 character with independent data, health, input and inventory, using an alternate
 authored outfit palette on private Costume/Material instances.
+The networking probe is separately opt-in via `-gmp-net-probe` and binds only to
+loopback; it is not a player-facing host/join mode.
 Plugin loading and Steam initialization passed under the installed Proton
 runtime. System Wine hit a cryptography error; Proton resolved it.
 
@@ -43,11 +84,12 @@ The smoke suite runs the real game and verifies startup, Steam authentication,
 hook discovery and clean exit. Its intentionally broken hook gate must fail.
 **This does not test multiple players, networking or co-op gameplay.**
 
-## Independent-character tests
+## Real-game test suites
 
 ```sh
 python tools/seat_test.py --windowed --suite
 python tools/target_test.py --suite
+python tools/controller_test.py --suite
 python tools/net_test.py --suite
 ```
 
@@ -63,6 +105,16 @@ ids, rejects stale, wrong-epoch and host-id-claim packets, and replicates the
 guest's movement to the host. Its stale, authority and remote-apply mutations
 must each fail.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
+
+To run the expanded regression serially (build, loader, coexistence, networking,
+actors, targeting and controllers):
+
+```sh
+python tools/verify.py --integration
+```
+
+These integration commands use Steam and visible isolated game windows. Do not
+deploy a new DLL while a test is running.
 
 ## Two copies at once
 
