@@ -18,6 +18,7 @@ def main():
     if args.integration:
         steps += [
             ("build", ["tools/build_plugin.py", "--deploy-test"]),
+            ("startup", ["tools/startup_test.py", "--suite"]),
             ("loader", ["tools/smoke_test.py", "--suite"]),
             ("coexistence", ["tools/two_instance_test.py", "--windowed"]),
             ("net-loopback", ["tools/net_test.py", "--suite"]),

@@ -148,6 +148,10 @@ Verified DLL SHA-256:
 Private evidence is under `local/profiles/net-brain-<run>/`; the aggregate is
 `local/net-brain-suite-summary.json`.
 
+The v0.8.1 presentation-only startup shortcut was subsequently verified with the
+complete 12-stage regression, including both O4 suites and their mutation twins.
+It does not bypass dungeon generation, Steam initialization or gameplay setup.
+
 ## Not covered
 
 - Shared floor seed, layout, room identity or general scene replication.

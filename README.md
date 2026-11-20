@@ -3,7 +3,7 @@
 Co-op mod research and development for Going Under.
 
 **Status (2026-11-20): experimental local actors plus two-client loopback
-networking, enemy targeting and native enemy-movement mirroring (v0.8.0).
+networking, enemy targeting and native enemy-movement mirroring (v0.8.1).
 Not a playable online co-op release.**
 
 ## Project status
@@ -26,8 +26,8 @@ replicates guest poses, not host-simulated guest input.
 
 ### Verification scope
 
-- **55 Python tooling/scorer tests** and **27 production input-mapping checks passed**.
-- **v0.8.0 full serial regression passed:** loader, coexistence, loopback
+- **58 Python tooling/scorer tests** and **27 production input-mapping checks passed**.
+- **v0.8.1 full serial regression passed:** startup skipping, loader, coexistence, loopback
   networking, local actors, local targeting, O4a network targeting and controller
   routing plus O4b native enemy movement, including their intentional-failure controls.
 - Earlier attempts hit lifecycle timeouts. Those remain recorded failures;
@@ -94,6 +94,21 @@ hook discovery and clean exit. Its intentionally broken hook gate must fail.
 **This does not test multiple players, networking or co-op gameplay.**
 
 ## Real-game test suites
+
+Automated probes now skip the game's timed logo/stinger presentation and stop
+title-screen videos automatically. The existing gameplay probes also bypass the
+story intro in isolated saves. Ordinary play is unchanged; engine loading and
+Steam authentication still run normally.
+
+The startup control suite checks the shortcut against unskipped native startup:
+
+```sh
+python tools/startup_test.py --suite
+```
+
+The last measured pair reached Title **1.49 s vs 11.64 s** after stinger startup
+(about **10 seconds saved**). This is presentation timing, not total process
+startup time. `-gmp-normal-startup` restores normal presentation in a test launch.
 
 ```sh
 python tools/seat_test.py --windowed --suite

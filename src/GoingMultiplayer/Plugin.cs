@@ -8,13 +8,14 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.8.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.8.1")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
         private int sceneCount;
         private bool hooksFound;
         private bool smokeMode;
+        private bool startupProbe;
         private int smokeMinScenes = 1;
         private string runId = "manual";
         private bool seatProbe;
@@ -31,8 +32,9 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.8.0 networking=loopback_test_only");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.8.1 networking=loopback_test_only");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
+            startupProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-startup-probe") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
             targetProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-probe") >= 0;
             netProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-probe") >= 0;
@@ -71,6 +73,9 @@ namespace GoingMultiplayer
             if (smokeMode && Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-negative-hook") >= 0)
                 hooksFound = false;
             SceneManager.sceneLoaded += OnSceneLoaded;
+            if (smokeMode || seatProbe || targetProbe || netProbe || netAiProbe)
+                TestStartup.Install(this,
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-normal-startup") < 0);
             if (localPrototype) LocalSeats.Install();
         }
 
@@ -100,12 +105,25 @@ namespace GoingMultiplayer
             if (!smokeMode) yield break;
             float deadline = Time.realtimeSinceStartup + 30f;
             while (Time.realtimeSinceStartup < deadline
-                && (!Steamworks.SteamClient.IsValid || sceneCount < smokeMinScenes))
+                && (!Steamworks.SteamClient.IsValid || sceneCount < smokeMinScenes
+                    || (startupProbe && !TestStartup.TitleReady)))
                 yield return null;
             bool passed = hooksFound && Steamworks.SteamClient.IsValid && sceneCount >= smokeMinScenes;
             Report("GMP_SMOKE_RESULT " + (passed ? "PASS" : "FAIL")
                 + " run=" + runId + " hooks=" + hooksFound + " steam=" + Steamworks.SteamClient.IsValid
                 + " scenes=" + sceneCount);
+            if (startupProbe)
+            {
+                bool startupPassed = TestStartup.StingerSeen && TestStartup.Skipped
+                    && TestStartup.TitleReady && TestStartup.VideosStopped;
+                Report("GMP_STARTUP_RESULT " + (passed && startupPassed ? "PASS" : "FAIL")
+                    + " run=" + runId + " stinger=" + TestStartup.StingerSeen
+                    + " skipped=" + TestStartup.Skipped + " title=" + TestStartup.TitleReady
+                    + " videos_stopped=" + TestStartup.VideosStopped + " seconds="
+                    + TestStartup.TitleSeconds.ToString("F3", System.Globalization.CultureInfo.InvariantCulture));
+                passed &= startupPassed;
+            }
+            TestStartup.StopForQuit();
             Application.Quit(passed ? 0 : 1);
         }
 

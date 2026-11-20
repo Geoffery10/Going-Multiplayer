@@ -42,6 +42,9 @@ redefine correctness. L4 is a field test of the same gates on separate hardware.
   not required until the Steam adapter is written.
 - Rendered windows are required: this build exits during batch-mode GUI
   initialization. Resource use is measured before claiming any larger scale.
+- Automated probes skip timed startup logos and title videos; engine and Steam
+  initialization still execute. `tools/startup_test.py --suite` compares the
+  shortcut with an unskipped control. Ordinary play is not accelerated.
 - Two clients only. Do not add a third or fourth player, or capacity claims,
   until the late-development scale phase.
 - The two-instance spike passed: two rendered copies on the same Steam account

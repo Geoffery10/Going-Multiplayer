@@ -25,6 +25,7 @@ def main():
             "UnityEngine.dll", "UnityEngine.CoreModule.dll", "UnityEngine.IMGUIModule.dll",
             "UnityEngine.InputModule.dll",
             "UnityEngine.PhysicsModule.dll", "UnityEngine.AnimationModule.dll",
+            "UnityEngine.VideoModule.dll",
             "Rewired_Core.dll",
             "UnityEngine.ScreenCaptureModule.dll",
             "Assembly-CSharp-firstpass.dll",

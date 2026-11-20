@@ -28,23 +28,24 @@ class VerificationRunnerTests(unittest.TestCase):
             return exited.exception.code, summary, run.call_args_list
 
     def test_coexistence_failure_stops_later_game_stages(self):
-        code, summary, calls = self.run_fixture(True, [0, 0, 0, 0, 1])
+        code, summary, calls = self.run_fixture(True, [0, 0, 0, 0, 0, 1])
         self.assertEqual(code, 1)
         self.assertFalse(summary["passed"])
         self.assertEqual(summary["stages"][-1], dict(stage="coexistence", exit_code=1))
-        self.assertEqual(len(calls), 5)
+        self.assertEqual(len(calls), 6)
 
     def test_expanded_serial_order_includes_network_ai(self):
-        code, summary, calls = self.run_fixture(True, [0] * 11)
+        code, summary, calls = self.run_fixture(True, [0] * 12)
         self.assertEqual(code, 0)
         self.assertTrue(summary["passed"])
         self.assertEqual([stage["stage"] for stage in summary["stages"]],
-                         ["tooling", "pad-mapping", "build", "loader", "coexistence",
+                         ["tooling", "pad-mapping", "build", "startup", "loader", "coexistence",
                           "net-loopback", "actors", "targeting", "net-ai-targeting",
                           "net-ai-movement", "controllers"])
-        self.assertEqual(len(calls), 11)
-        self.assertEqual(calls[8].args[0][1:], ["tools/net_ai_test.py", "--suite"])
-        self.assertEqual(calls[9].args[0][1:], ["tools/net_ai_test.py", "--brain", "--suite"])
+        self.assertEqual(len(calls), 12)
+        self.assertEqual(calls[3].args[0][1:], ["tools/startup_test.py", "--suite"])
+        self.assertEqual(calls[9].args[0][1:], ["tools/net_ai_test.py", "--suite"])
+        self.assertEqual(calls[10].args[0][1:], ["tools/net_ai_test.py", "--brain", "--suite"])
 
     def test_default_does_not_launch_or_build_the_game(self):
         code, summary, calls = self.run_fixture(False, [0, 0])
