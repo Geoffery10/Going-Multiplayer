@@ -5,24 +5,27 @@ online/co-op release or split-screen implementation.
 
 ## Verified build
 
-Version **0.3.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
+Version **0.4.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
 
 | Check | Result |
 | --- | --- |
-| Tooling/scorer/isolation tests | 22 passed |
+| Tooling/scorer/isolation tests | 25 passed |
 | Production pad-frame mapping | 27 checks passed |
 | Authenticated loader and broken-hook control | Both behaved as expected |
 | Two independent characters | PASS |
 | Intentionally broken health isolation | Expected FAIL; other checks stayed true |
 | Five independent characters with alternate outfits | PASS |
 | Native inventory exception context restoration | PASS |
+| Enemy targeting for the second actor | PASS; nearer-actor swap and exclusion controls PASS |
+| Intentionally non-hostile second actor | Expected FAIL; no second-actor target |
 | Controller routing and intentionally shared-input control | Both behaved as expected |
 | Detected controller ownership, neutral polling and restoration | PASS with two compatible gamepads |
 | Original game file integrity | 207 files checked, zero changes |
 
-`python tools/verify.py --integration` passed all stages. These results establish
-only the specific local-state, pickup and movement checks below, not online or
-complete roguelike mechanics.
+The gates listed were run individually after this change; a full
+`python tools/verify.py --integration` rerun is pending. These results establish
+only the specific local-state, pickup, movement and targeting checks below, not
+online or complete roguelike mechanics.
 Controller action tests used deterministic snapshots; physical button presses
 and full controller combat have not been verified.
 
@@ -50,6 +53,7 @@ and full controller combat have not been verified.
 ```sh
 python tools/build_plugin.py --deploy-test
 python tools/seat_test.py --windowed --suite
+python tools/target_test.py --suite
 python -m unittest discover -s tests -v
 ```
 
@@ -66,6 +70,36 @@ It checks:
 7. An active animated actor and alternate material/texture, with P1's material
    and costume unchanged.
 8. A unique run result, a clean expected exit and an intentional health failure.
+
+### Enemy-targeting gate
+
+`python tools/target_test.py --suite` loads the office, then enters a dungeon
+through the game's own entrance trigger instead of a human walking to the
+elevator. It keeps P1 and P2 at prepared positions and moves one authored enemy
+between them:
+
+1. P2 is a valid target: it is in `Character.characters`, shares the enemy's
+   room, is hostile, alive and active.
+2. An enemy activated near P2 selects P2 by itself.
+3. Moving the enemy next to P1 makes the same enemy select P1.
+4. Making P2 non-hostile removes it from consideration; the gate must fail for
+   that reason.
+5. A valid P1 target is not replaced merely because P2 is closer; forcing
+   reacquisition then selects P2.
+
+The last point is native aggro stickiness, not necessarily a co-op bug. It is
+recorded because it matches the observed "enemies ignore P2" symptom and will
+need an explicit co-op policy decision.
+
+Logs: `local/profiles/target-p2*/logs/`. Summary:
+`local/target-suite-summary.json`.
+
+### Automated dungeon entry
+
+`DungeonEntry` finds the office's real `DungeonTrigger` instances, rejects the
+legacy `GeneratedDungeon` placeholder that is not in this build, and enters a
+loadable authored scene through the game's own `Enter()` path. This removes the
+manual "walk to the elevator" step from automated gates.
 
 Logs: `local/profiles/seats-*/logs/`. Summary: `local/seat-suite-summary.json`.
 Screenshots are captured by the game, not from the desktop.

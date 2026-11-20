@@ -16,7 +16,8 @@ Co-op mod research and development for Going Under.
 These are planned features, not verified functionality. Online co-op is the
 primary goal; local split-screen with multiple controllers is a secondary goal.
 
-See [the design](docs/DESIGN.md) for proposed rules and verification gates.
+See [the design](docs/DESIGN.md) for proposed rules and verification gates, and
+[the online testing strategy](docs/ONLINE-QA.md) for the tier ladder and gates.
 Private game copies, dumps, logs and machine-specific notes belong in `local/`
 and must never be distributed.
 
@@ -46,12 +47,16 @@ hook discovery and clean exit. Its intentionally broken hook gate must fail.
 
 ```sh
 python tools/seat_test.py --windowed --suite
+python tools/target_test.py --suite
 ```
 
 The bot loads the isolated office save, spawns additional characters, checks
 separate health/data/inventory/input, performs a native item pickup, drives native
 movement and captures the game's framebuffer. The suite also checks an
 intentionally broken health accessor and five-character spawning.
+The targeting suite enters a dungeon through the game's own entrance trigger and
+checks that a second actor is a valid enemy target and that the nearer actor is
+selected. It also records the game's native target stickiness.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
 
 ## Try P2 with a controller

@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.3.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.4.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -17,13 +17,15 @@ namespace GoingMultiplayer
         private bool smokeMode;
         private string runId = "manual";
         private bool seatProbe;
+        private bool targetProbe;
         private bool localPrototype;
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.3.0 networking=not_implemented");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.4.0 networking=not_implemented");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
+            targetProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-probe") >= 0;
             localPrototype = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-local-prototype") >= 0;
             foreach (string argument in Environment.GetCommandLineArgs())
                 if (argument.StartsWith("-gmp-run-id=", StringComparison.Ordinal))
@@ -59,6 +61,12 @@ namespace GoingMultiplayer
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-negative-health") >= 0));
                 yield break;
             }
+            if (targetProbe)
+            {
+                yield return StartCoroutine(RunTargetProbe(
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-negative") >= 0));
+                yield break;
+            }
             if (!smokeMode) yield break;
             float deadline = Time.realtimeSinceStartup + 20f;
             while (Time.realtimeSinceStartup < deadline
@@ -83,6 +91,28 @@ namespace GoingMultiplayer
                 if (failure != null)
                 {
                     Logger.LogError("GMP_SEAT_EXCEPTION " + failure);
+                    Application.Quit(1);
+                    yield break;
+                }
+                if (!next) yield break;
+                yield return probe.Current;
+            }
+        }
+
+        private IEnumerator RunTargetProbe(bool negative)
+        {
+            IEnumerator probe = TargetProbe.Run(this, runId, negative);
+            while (true)
+            {
+                bool next = false;
+                Exception failure = null;
+                try { next = probe.MoveNext(); }
+                catch (Exception exception) { failure = exception; }
+                if (failure != null)
+                {
+                    Logger.LogError("GMP_TARGET_EXCEPTION " + failure);
+                    Report("GMP_TARGET_EXCEPTION run=" + runId + " " + failure.GetType().Name
+                        + ": " + failure.Message);
                     Application.Quit(1);
                     yield break;
                 }
@@ -126,7 +156,7 @@ namespace GoingMultiplayer
         internal void Report(string text)
         {
             Logger.LogInfo(text);
-            if (seatProbe || smokeMode)
+            if (seatProbe || smokeMode || targetProbe)
                 File.AppendAllText(Path.Combine(BepInEx.Paths.GameRootPath, "gmp-trace-" + runId + ".log"),
                     text + Environment.NewLine);
         }
