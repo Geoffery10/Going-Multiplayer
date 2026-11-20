@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.8.1")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.9.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -23,6 +23,7 @@ namespace GoingMultiplayer
         private bool netProbe;
         private bool netAiProbe;
         private bool netBrainProbe;
+        private bool netDamageProbe;
         private bool netNegative;
         private bool netStaleNegative;
         private bool netAuthorityNegative;
@@ -32,7 +33,7 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.8.1 networking=loopback_test_only");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.9.0 networking=loopback_test_only");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             startupProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-startup-probe") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
@@ -40,6 +41,7 @@ namespace GoingMultiplayer
             netProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-probe") >= 0;
             netAiProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-ai-probe") >= 0;
             netBrainProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-brain-probe") >= 0;
+            netDamageProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-damage-probe") >= 0;
             netAiProbe |= netBrainProbe;
             netNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-negative") >= 0;
             netStaleNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-stale-negative") >= 0;
@@ -73,7 +75,7 @@ namespace GoingMultiplayer
             if (smokeMode && Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-negative-hook") >= 0)
                 hooksFound = false;
             SceneManager.sceneLoaded += OnSceneLoaded;
-            if (smokeMode || seatProbe || targetProbe || netProbe || netAiProbe)
+            if (smokeMode || seatProbe || targetProbe || netProbe || netAiProbe || netDamageProbe)
                 TestStartup.Install(this,
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-normal-startup") < 0);
             if (localPrototype) LocalSeats.Install();
@@ -97,7 +99,7 @@ namespace GoingMultiplayer
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-negative") >= 0));
                 yield break;
             }
-            if (netProbe || netAiProbe)
+            if (netProbe || netAiProbe || netDamageProbe)
             {
                 yield return StartCoroutine(RunNetProbe());
                 yield break;
@@ -183,7 +185,11 @@ namespace GoingMultiplayer
                 Application.Quit(1);
                 yield break;
             }
-            IEnumerator probe = netAiProbe
+            IEnumerator probe = netDamageProbe
+                ? NetDamageProbe.Run(this, runId, netRole, netPort,
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-damage-target-negative") >= 0,
+                    Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-damage-duplicate-negative") >= 0)
+                : netAiProbe
                 ? NetAiProbe.Run(this, runId, netRole, netPort,
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-ai-negative") >= 0,
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-target-negative") >= 0,
@@ -246,7 +252,7 @@ namespace GoingMultiplayer
         internal void Report(string text)
         {
             Logger.LogInfo(text);
-            if (seatProbe || smokeMode || targetProbe || netProbe || netAiProbe)
+            if (seatProbe || smokeMode || targetProbe || netProbe || netAiProbe || netDamageProbe)
                 File.AppendAllText(Path.Combine(BepInEx.Paths.GameRootPath, "gmp-trace-" + runId + ".log"),
                     text + Environment.NewLine);
         }

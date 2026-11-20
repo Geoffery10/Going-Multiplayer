@@ -179,7 +179,8 @@ def score_brain(host_text, guest_text, run_id, build, host_result, guest_result,
             and gb["activation_blocks"] >= 4 and gb["freeze_drift"] < 0.05)
 
 
-def run_gate(proton, timeout=300, negative=None, brain=False):
+def run_gate(proton, timeout=300, negative=None, brain=False, *, probe_flag=None,
+             score_fn=None, parse_fn=None, evidence_prefix=None, mutation_flag=None, scope=None):
     run_id, port = uuid.uuid4().hex, free_port()
     build = hashlib.sha256((ROOT / "artifacts/GoingMultiplayer.dll").read_bytes()).hexdigest()
     installs = {role: ensure_install(name) for role, name in (("host", "a"), ("guest", "b"))}
@@ -187,12 +188,12 @@ def run_gate(proton, timeout=300, negative=None, brain=False):
     results = {role: dict(timed_out=False, exit_code=None) for role in installs}
     error = None
     deadline = time.monotonic() + timeout
-    folder = ROOT / "local/profiles" / (("net-brain-" if brain else "net-ai-") + run_id)
+    folder = ROOT / "local/profiles" / ((evidence_prefix or ("net-brain-" if brain else "net-ai-")) + run_id)
     try:
         for role in ("host", "guest"):
-            args = ["-gmp-net-brain-probe" if brain else "-gmp-net-ai-probe"]
+            args = [probe_flag or ("-gmp-net-brain-probe" if brain else "-gmp-net-ai-probe")]
             if role == "guest" and negative:
-                args.append("-gmp-net-" + negative + "-negative")
+                args.append(mutation_flag or ("-gmp-net-" + negative + "-negative"))
             clients[role] = start_client("net-" + role, installs[role], proton, role,
                                          port, run_id, None, probe_args=args)
             if role == "host":
@@ -224,7 +225,8 @@ def run_gate(proton, timeout=300, negative=None, brain=False):
                 if source.exists():
                     shutil.copy2(source, evidence / name)
     parser, scorer = (parse_brain, score_brain) if brain else (parse, score_pair)
-    summary = dict(scope="O4b scoped native host brain/mirror" if brain else __doc__,
+    parser, scorer = parse_fn or parser, score_fn or scorer
+    summary = dict(scope=scope or ("O4b scoped native host brain/mirror" if brain else __doc__),
                    run_id=run_id, build=build, negative=negative, error=error,
                    passed=error is None and scorer(
                        texts["host"], texts["guest"], run_id, build,
