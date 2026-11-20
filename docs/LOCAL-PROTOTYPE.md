@@ -6,16 +6,18 @@ transport exists only inside test probes and is not a production session.
 
 ## Verified build
 
-Version **0.5.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
+Version **0.6.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
 
 | Check | Result |
 | --- | --- |
-| Tooling/scorer/isolation tests | 33 passed |
+| Tooling/scorer/isolation tests | 35 passed |
 | Production pad-frame mapping | 27 checks passed |
 | Authenticated loader and broken-hook control | Both behaved as expected |
 | Two same-account clients concurrently | Both reached Title, Steam valid, hooks found, exit 0 |
 | Two-client loopback presence/movement | PASS; guest moved 3.07 m, host applied it, positions matched |
+| Loopback epoch/stale/authority rejection | PASS; all three controls rejected by the host |
 | Loopback remote-apply mutation | Expected FAIL; host applied 0 m |
+| Loopback stale/authority mutations | Expected FAIL; host applied the invalid 999,999 pose |
 | Two independent characters | PASS |
 | Intentionally broken health isolation | Expected FAIL; other checks stayed true |
 | Five independent characters with alternate outfits | PASS |
@@ -96,7 +98,9 @@ host applies the received pose to its remote actor. The scorer cross-checks both
 traces and requires the mutation run (host skips applying poses) to fail.
 
 This is not the production transport, lobby or gameplay sync. It records the
-first verified two-process replication: presence plus position.
+first verified two-process replication: presence plus position, session epoch,
+stale-sequence rejection and a host-id authority rejection. Three mutations
+(remote apply disabled, stale accepted, authority accepted) must each fail.
 
 ### Enemy-targeting gate
 

@@ -58,8 +58,10 @@ intentionally broken health accessor and five-character spawning.
 The targeting suite enters a dungeon through the game's own entrance trigger and
 checks that a second actor is a valid enemy target and that the nearer actor is
 selected. It also records the game's native target stickiness.
-The loopback suite runs two real clients, assigns a session and player ids, and
-replicates the guest's movement to the host. Its remote-apply mutation must fail.
+The loopback suite runs two real clients, assigns a session/epoch and player
+ids, rejects stale, wrong-epoch and host-id-claim packets, and replicates the
+guest's movement to the host. Its stale, authority and remote-apply mutations
+must each fail.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
 
 ## Two copies at once

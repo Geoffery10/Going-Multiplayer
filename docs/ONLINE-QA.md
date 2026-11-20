@@ -119,8 +119,10 @@ before and after.
    scripted movement to the host's remote actor. A mutation that skips applying
    remote poses must fail the host.
    Positive run: guest moved 3.07 m over 97 updates, host applied 3.07 m, and
-   the final cross-checked positions matched. Not yet covered: epochs, stale
-   packet rejection, input authority and loss/chaos.
+   the final cross-checked positions matched. The host also rejected a stale
+   sequence, a wrong epoch and a guest packet claiming host id; each has its own
+   mutation that must fail.
+   Not yet covered: loss/chaos, scene/floor epochs, remote animation, combat.
 4. O2, then online O4, then O5–O9.
 
 ## Late validation with a friend
