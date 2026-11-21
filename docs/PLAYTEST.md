@@ -107,7 +107,8 @@ automatically once Steam is ready.
 
 - Scene-changing doors (elevator/floors) move the whole party: the guest's
   transition is forwarded to the host, which performs it and re-announces.
-  Room-to-room doors are host-replayed and not yet verified with two players.
+- Scripted door/elevator moves inside a scene are mirrored to the other player
+  by a teleport delta, in both directions.
 - The window can be unfocused: co-op keeps running (and so does the game).
 
 - No host-authoritative actions yet: attack, dodge, throw, interact, focus and

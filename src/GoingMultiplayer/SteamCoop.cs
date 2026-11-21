@@ -29,6 +29,8 @@ namespace GoingMultiplayer
         private bool initialSyncSent;
         private string pendingScene;
         private string hostScene;
+        private Vector3 lastLocalPosition;
+        private bool hasLocalPosition;
         private bool forcedBackground;
         private float lastSceneBeat;
         private float lastStats;
@@ -238,6 +240,36 @@ namespace GoingMultiplayer
                 lastStats = now;
                 ReportStats(now);
             }
+            // A scripted move (special door, elevator) moves only the local
+            // player; take the party with it.
+            if (hasLocalPosition)
+            {
+                Vector3 delta = local.transform.position - lastLocalPosition;
+                delta.y = 0f;
+                if (delta.magnitude > 4f)
+                {
+                    if (isHost)
+                    {
+                        foreach (NetworkActor actor in ActorRegistry.All)
+                            if (actor.Simulated && actor.Seat != null && actor.Seat.Player)
+                                Move(actor.Seat.Player,
+                                    actor.Seat.Player.transform.position + delta);
+                        plugin.Report("GMP_COOP_TELEPORT role=host delta="
+                            + delta.x.ToString("F2", Culture) + ","
+                            + delta.z.ToString("F2", Culture));
+                    }
+                    else
+                    {
+                        // Ask the host to bring the party along.
+                        plugin.Report("GMP_COOP_TELEPORT role=guest request delta="
+                            + delta.x.ToString("F2", Culture) + ","
+                            + delta.z.ToString("F2", Culture));
+                    }
+                    session.SendTeleport(delta.x, delta.y, delta.z, now);
+                }
+            }
+            lastLocalPosition = local.transform.position;
+            hasLocalPosition = true;
             if (isHost && !initialSyncSent)
             {
                 initialSyncSent = true;
@@ -366,6 +398,7 @@ namespace GoingMultiplayer
         internal void OnSceneLoaded()
         {
             pauseTabInstalled = false;
+            hasLocalPosition = false;
             if (session == null || state != CoopState.Running) return;
             if (!isHost && session.State == SessionState.Playing)
             {
@@ -483,6 +516,37 @@ namespace GoingMultiplayer
                     hostScene = scene;
                     if (seed != 0) SceneSync.PendingSeed = seed;
                     ApplyHostScene(scene);
+                };
+                session.TeleportReceived += delegate(float dx, float dy, float dz)
+                {
+                    Vector3 delta = new Vector3(dx, dy, dz);
+                    Player local = Player.singlePlayer;
+                    if (isHost)
+                    {
+                        // A guest opened a scripted door: move the party too.
+                        if (local != null)
+                        {
+                            Move(local, local.transform.position + delta);
+                            lastLocalPosition = local.transform.position;
+                        }
+                        foreach (NetworkActor actor in ActorRegistry.All)
+                            if (actor.Simulated && actor.Seat != null && actor.Seat.Player)
+                                Move(actor.Seat.Player,
+                                    actor.Seat.Player.transform.position + delta);
+                        plugin.Report("GMP_COOP_TELEPORT role=host from=guest delta="
+                            + delta.x.ToString("F2", Culture) + ","
+                            + delta.z.ToString("F2", Culture));
+                        return;
+                    }
+                    if (local == null) return;
+                    Move(local, local.transform.position + delta);
+                    // Suppress our own jump detection: this delta came from the
+                    // host and must not be echoed back.
+                    lastLocalPosition = local.transform.position;
+                    plugin.Report("GMP_COOP_TELEPORT role=guest delta="
+                        + delta.x.ToString("F2", Culture) + ","
+                        + delta.y.ToString("F2", Culture) + ","
+                        + delta.z.ToString("F2", Culture));
                 };
                 session.SceneIntentReceived += delegate(string scene)
                 {
@@ -611,6 +675,19 @@ namespace GoingMultiplayer
                 + " peers=" + session.Peers.Count
                 + " commands=" + session.CommandsReceived
                 + " focus=" + (Player.singlePlayer != null && Player.singlePlayer.focusing));
+        }
+
+        private static readonly System.Globalization.CultureInfo Culture =
+            System.Globalization.CultureInfo.InvariantCulture;
+
+        private static void Move(Player player, Vector3 position)
+        {
+            player.transform.position = position;
+            if (player.rb)
+            {
+                player.rb.position = position;
+                player.rb.velocity = Vector3.zero;
+            }
         }
 
         private static byte[] ReadSaveSlot()

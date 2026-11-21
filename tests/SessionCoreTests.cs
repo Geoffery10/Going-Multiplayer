@@ -201,6 +201,18 @@ internal static class SessionCoreTests
         Pump(host, guest, ref now);
         Check(intent == "Dungeon_Joblin", "scene intent");
 
+        // Party teleport offsets.
+        float tx = 0f, ty = 0f, tz = 0f;
+        bool gotTeleport = false;
+        guest.TeleportReceived += delegate(float x, float y, float z)
+        {
+            tx = x; ty = y; tz = z; gotTeleport = true;
+        };
+        host.SendTeleport(3f, 0f, -2f, now);
+        Pump(host, guest, ref now);
+        Check(gotTeleport && Math.Abs(tx - 3f) < 0.001f && Math.Abs(tz + 2f) < 0.001f,
+            "party teleport");
+
         // A guest may not claim the host's player id.
         int hostRejectedBefore = host.Rejected;
         int hostPeerCountBefore = receivedByHost.Count;

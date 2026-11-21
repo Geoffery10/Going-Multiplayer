@@ -24,6 +24,7 @@ namespace GoingMultiplayer
         Save = 11,
         Scene = 12,
         SceneIntent = 13,
+        Teleport = 14,
     }
 
     internal struct PlayerSnapshot
@@ -308,6 +309,40 @@ namespace GoingMultiplayer
                     WriteString(writer, scene);
                     writer.Write(seed);
                 });
+        }
+
+        internal static byte[] Teleport(ushort protocol, uint epoch, int playerId,
+            uint sequence, float x, float y, float z)
+        {
+            return Build(MessageType.Teleport, protocol, epoch, playerId, sequence,
+                delegate(BinaryWriter writer)
+                {
+                    writer.Write(x);
+                    writer.Write(y);
+                    writer.Write(z);
+                });
+        }
+
+        internal static bool TryTeleport(byte[] data, out float x, out float y, out float z)
+        {
+            x = 0f;
+            y = 0f;
+            z = 0f;
+            try
+            {
+                using (var reader = OpenBody(data, MessageType.Teleport))
+                {
+                    if (reader == null) return false;
+                    x = reader.ReadSingle();
+                    y = reader.ReadSingle();
+                    z = reader.ReadSingle();
+                    return !float.IsNaN(x) && !float.IsInfinity(x)
+                        && !float.IsNaN(y) && !float.IsInfinity(y)
+                        && !float.IsNaN(z) && !float.IsInfinity(z);
+                }
+            }
+            catch (IOException) { return false; }
+            catch (ArgumentException) { return false; }
         }
 
         internal static byte[] SceneIntent(ushort protocol, uint epoch, int playerId,
@@ -693,6 +728,7 @@ namespace GoingMultiplayer
         internal Action<byte[]> SaveReceived = delegate { };
         internal Action<string, int> SceneReceived = delegate { };
         internal Action<string> SceneIntentReceived = delegate { };
+        internal Action<float, float, float> TeleportReceived = delegate { };
         internal Action<SessionState> StateChanged = delegate { };
         internal Action<Peer> Kicked = delegate { };
 
@@ -801,6 +837,17 @@ namespace GoingMultiplayer
 
         // A guest that opened a door itself asks the host to take the party
         // through the same transition instead of being pulled back.
+        // Scripted moves (special doors, elevators) must take the whole party.
+        internal void SendTeleport(float x, float y, float z, double now)
+        {
+            if (State != SessionState.Playing) return;
+            sequence++;
+            byte[] data = SessionCodec.Teleport(config.ProtocolVersion, Epoch,
+                LocalPlayerId, sequence, x, y, z);
+            foreach (Peer peer in Peers.All)
+                if (peer.Connected) transport.Send(peer.Key, data, true);
+        }
+
         internal void SendSceneIntent(string scene, double now)
         {
             if (string.IsNullOrEmpty(scene)) return;
@@ -1013,6 +1060,17 @@ namespace GoingMultiplayer
                     return;
                 }
                 if (SceneIntentReceived != null) SceneIntentReceived(scene);
+            }
+            else if (type == MessageType.Teleport)
+            {
+                float tx, ty, tz;
+                if (!SessionCodec.TryTeleport(packet.Data, out tx, out ty, out tz))
+                {
+                    Rejected++;
+                    return;
+                }
+                if (TeleportReceived != null)
+                    TeleportReceived(tx, ty, tz);
             }
             else if (type == MessageType.Command)
             {

@@ -54,6 +54,11 @@ Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet
 - A guest that opens a scene-changing door sends a **scene intent**; the host
   performs the same transition, then re-announces the scene and seed, so the
   party moves together instead of the guest being pulled back.
+- Scripted moves inside a scene (special-room doors, elevators) are detected as
+  a >4 unit jump by the local player. The host moves its simulated actors by
+  the same delta and broadcasts it; a guest that initiates the jump asks the
+  host to follow. The receiving side suppresses its own detection so the delta
+  is never echoed back.
 - Room-to-room doors inside a floor do not change scenes; they depend on the
   host replaying the guest's interact command, which is unverified in a real
   session.
