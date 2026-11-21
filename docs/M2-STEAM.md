@@ -1,7 +1,8 @@
 # M2 Steam transport and lobby
 
-Status: **in progress**, v0.12.0, 2026-11-21. This is the first production-shaped
-Steam path, not a playable online co-op session.
+Status: **in progress**, started v0.12.0, current build v0.13.0, 2026-11-21.
+This is the first production-shaped Steam path, not a playable online co-op
+session.
 
 ## Implemented
 
@@ -48,7 +49,9 @@ Steam path, not a playable online co-op session.
   running the game). This is the M0c/M2 field gate and needs a second owned copy
   or the friend.
 - In-game invite acceptance through the shipping UI and launch-from-invite.
-- A player-facing Host/Join/Invite menu; current entry points are test flags.
+- A player-facing Host/Join/Invite menu; the first `SteamCoop` F7 panel and an
+  ESC-menu Co-op tab exist, with Host, Join clipboard, Invite, Leave, copy-lobby-id
+  and host-side kick controls. The list shows lobby members.
 - Relay-socket transport. The implemented path is the proven legacy P2P path;
   `SteamNetworkingSockets` remains an optional upgrade.
 
@@ -73,9 +76,22 @@ The host prints `GMP_M2_LOBBY <id>`; the guest joins by that id. A pass requires
 both sides to report `GMP_M2_RESULT PASS`, the same session id, `state=Playing`,
 `peers=1`, and at least 10 snapshots received.
 
+## Production controller
+
+`SteamCoop` owns a persistent lobby and `NetSession` outside the probes. It is
+available from the F7 panel and the ESC-menu Co-op tab in normal play, and has
+command-line host mode (`-gmp-coop-host`). The tab shows lobby members and, on
+the host, Invite and Kick actions. A minimized host smoke under the real AppID
+passes with the tab installed: `local/coop-host-summary.json`,
+`python tools/coop_host_test.py`.
+
+Kick is a game-session message: the host tells the guest to leave and removes
+its peer. Steam's lobby API does not expose a direct kick operation here, so a
+guest that ignores the message remains in the Steam lobby until it leaves.
+
 ## Next
 
 1. Run the real-AppID M0c/M2 checklist with a second owned copy/friend.
-2. Add the Host/Join/Invite UI and acceptance callback test.
+2. Test the real invite acceptance path and `+connect_lobby` with the F7 panel.
 3. Decide whether to keep legacy P2P or validate relay sockets for v1.
 4. Wire `steam-host` into the milestone regression after the field gate.

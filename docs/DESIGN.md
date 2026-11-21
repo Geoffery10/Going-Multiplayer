@@ -6,6 +6,11 @@
 - Four or more players supported by design; 2–4 recommended.
 - Online co-op is the primary goal. Local split-screen with multiple controllers
   is a secondary goal, not a prerequisite for the first online release.
+- Each online player has their own camera and HUD.
+- v1 keeps the party in one active room. Players move independently inside it;
+  door and floor transitions are party-wide. Independent room movement is a
+  later phase, not a v1 requirement.
+- Split-screen with two cameras/HUDs on one PC is out of scope.
 - Original game install and saves must remain unchanged during development.
 
 ## Proposed defaults — not yet implemented
@@ -52,8 +57,11 @@ Each gate needs recorded evidence and a negative control that can fail.
 
 ## Unknowns
 
-- Whether local split-screen seats can also join online sessions; defer this
-  decision until online player identity and controller isolation are established.
+- Whether local split-screen seats can also join online sessions; split-screen
+  itself is out of scope for v1.
+- Independent room movement (Option B) needs room occupancy, per-player room
+  identity and multi-room simulation; it is planned after the party-tethered
+  online path works.
 - Exact game hooks and whether any useful multiplayer logic already ships.
 - Mod-loader compatibility with this build under Wine/Proton.
 - Safe save isolation, including PlayerPrefs, Steam Cloud and achievements.

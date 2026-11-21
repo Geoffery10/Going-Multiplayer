@@ -5,9 +5,9 @@ Co-op mod research and development for Going Under.
 **Status (2026-11-21): experimental local actors, two-client loopback
 networking, enemy targeting, native enemy-movement mirroring, scoped
 electric-attack health replication, host-authoritative guest movement input,
-a standalone Steam-adapter harness, a persistent session core and the first
-Steam transport/lobby integration (v0.12.0, M2 in progress). Not a playable
-online co-op release.**
+a standalone Steam-adapter harness, a persistent session core, the first Steam
+transport/lobby integration and the M3 input/view foundation (v0.13.0; M2/M3
+in progress). Not a playable online co-op release.**
 
 ## Project status
 
@@ -25,7 +25,8 @@ online co-op release.**
 | Host-authoritative movement input (O2) | Guest movement intent is validated on the host, simulated by the native player path and returned as host snapshots. The guest followed host poses with zero measured error. Dropped input, accepted stale input, never-cleared input and ignored-snapshot mutation controls passed. Movement only; attack/dodge/interact/camera, prediction and reconciliation remain. See [the input notes](docs/O2-INPUT.md). |
 | Persistent session core (M1) | Production transport seam, binary session protocol, peer registry and epoch/sequence validation; two real clients share a session, replicate poses, interpolate remote actors and keep an actor's network id and health across the office-to-dungeon transition. Positive and ignored-snapshot mutation gates passed. This uses the test-only loopback transport, not Steam. |
 | Steam adapter harness (M0a) | Standalone harness under AppID 480: UDP positive/mutation passed; Steam lobby creation, join and P2P ping/pong passed both on one account and between two accounts (`members=2`, ~10–15 ms RTT) across a Proton/Wine host and a Windows guest. Lobby-id join and invite delivery with harness auto-accept passed. The real in-game invite-accept callback/UI remains an M2 check; no in-game Steam session is claimed. |
-| Steam transport/lobby (M2, in progress) | `SteamP2PTransport` and `SteamLobbyService` implement a production-shaped Steam path over legacy P2P. Two distinct accounts passed through the harness `--transport m2` mode with one shared session, one peer and `state=Playing`. In-game host-only lobby creation under AppID 1154810 passed. Full in-game distinct-account session, invite acceptance UI and relay-socket choice remain. See [M2 notes](docs/M2-STEAM.md). |
+| Steam transport/lobby (M2, in progress) | `SteamP2PTransport` and `SteamLobbyService` implement a production-shaped Steam path over legacy P2P. Two distinct accounts passed through the harness `--transport m2` mode with one shared session, one peer and `state=Playing`. The production `SteamCoop` controller, F7 panel and an ESC-menu Co-op tab now create a real-AppID lobby, list players, and provide host/invite/leave/kick controls; the minimized host smoke passed with the tab installed. Full in-game distinct-account session/playtest, animation and relay-socket choice remain. See [M2 notes](docs/M2-STEAM.md) and the [playtest guide](docs/PLAYTEST.md). |
+| Player replication foundation (M3, started) | Expanded action/camera/inventory input command, `NetworkInputState`, command-backed `LocalSeats` input path and a real-game per-client view gate. Each client reports local camera active, remote camera disabled and HUD bound to the local player. Action authority, animation state, party HUD and party-tethered transitions remain. See [M3 notes](docs/M3-PLAYER.md). |
 
 The loopback suite passed its positive gate and three intentional-failure controls
 (disabled pose application, accepted stale state and accepted host-id claims).
@@ -36,20 +37,22 @@ host-authoritative gameplay**, prediction, lag tolerance or a production session
 ### Verification scope
 
 - **74 Python tooling/scorer tests**, **27 production input-mapping checks**,
-  **23 session-core checks**, **18 production damage-ledger checks** and
+  **31 session-core checks**, **18 production damage-ledger checks** and
   **22 production input-command checks** pass.
-- **v0.12.0 quick regression passed 8/8 stages** (offline, build, loader, M1
+- **v0.13.0 quick regression passed 8/8 stages** (offline, build, loader, M1
   positive) with DLL SHA-256
-  `3d8959087038b35a6dc4cd8af1638ec3837862afeba80c649eb9b24d29993b50`.
-- **M1 session suite passed on v0.12.0**: positive host/guest session with
-  shared epoch, ready/done barriers, snapshots and scene actor survival; the
-  ignored-snapshot mutation made only the intended guest fail. Evidence:
-  `local/session-suite-summary.json`.
+  `e38e1b312d4fa1111ab2d4e91c532d8cd35d309c946de9143050da9f3fc2ddb9`.
+- **M1 session suite passed on v0.13.0**: positive host/guest session with
+  shared epoch, ready/done barriers, snapshots, scene actor survival and
+  per-client `view_ok`; the ignored-snapshot mutation made only the intended
+  guest fail. Evidence: `local/session-suite-summary.json`.
 - **M2 steam path evidence**: two distinct accounts passed the harness
   `--transport m2` gate with one session, one peer and `state=Playing`
   (`local/m2-harness-summary.json`). In-game host-only lobby creation under
   AppID 1154810 passed (`local/steam-host-summary.json`,
-  `python tools/steam_host_test.py`). The in-game distinct-account session is
+  `python tools/steam_host_test.py`). The production `SteamCoop` controller
+  passed a minimized host smoke (`local/coop-host-summary.json`,
+  `python tools/coop_host_test.py`). The in-game distinct-account session is
   not yet validated.
 - The **full 18-stage regression has not been rerun** since M1 was added. The
   last full 16-stage pass was v0.10.0; earlier lifecycle timeouts remain
@@ -77,17 +80,23 @@ host-authoritative gameplay**, prediction, lag tolerance or a production session
 - Host-authoritative combat effects, armor/invincibility, inventory, loot and
   currency.
 - Down/revive, party wipes, shared dungeon/floor identity and save persistence.
-- Remote animation, per-player HUD and camera work; local split-screen and
-  controller assignment for four or more seats.
+- Remote animation, per-player HUD and camera work. Each online client gets its
+  own camera/HUD; v1 keeps the party in one active room. Independent rooms
+  (Option B) are planned after v1; split-screen with two cameras/HUDs is out of
+  scope. See [the room/camera/HUD policy](docs/ROOM-CAMERA-PLAN.md).
 - Finish M2: in-game distinct-account session, invite acceptance UI,
   `+connect_lobby` launch, and the legacy-P2P versus relay-socket decision.
   The transport/lobby classes and two-account harness have passed.
+- Finish M3: host-authoritative action input, animation/effect replication,
+  teammate HUD, and party-tethered door/floor transitions. See
+  [M3 notes](docs/M3-PLAYER.md).
 - Disconnect/reconnect, packet loss/jitter/reordering and soak tests.
 - Steam lobby/invite UI, multi-machine validation and networked 4+ player scale.
+- Party-tethered door/floor transitions for v1; independent rooms are M8.
 
-**Next milestone:** finish M2 with the in-game distinct-account M0c/M2 play
-test and player-facing Host/Join/Invite UI. Continue the remaining O2 actions,
-prediction and broader combat afterward.
+**Next milestone:** finish M2's field test/UI and M3's action-authority slice.
+Continue with animation, party HUD and party-tethered transitions. See
+[the room/camera/HUD policy](docs/ROOM-CAMERA-PLAN.md).
 
 ## Target
 
@@ -102,7 +111,8 @@ These are planned features, not verified functionality. Online co-op is the
 primary goal; local split-screen with multiple controllers is a secondary goal.
 
 See [the design](docs/DESIGN.md) for proposed rules and verification gates,
-[the Steam co-op roadmap](docs/ROADMAP.md) for the milestone plan, and
+[the room/camera/HUD policy](docs/ROOM-CAMERA-PLAN.md) for the v1 party-tethered
+decision, [the Steam co-op roadmap](docs/ROADMAP.md) for the milestone plan, and
 [the online testing strategy](docs/ONLINE-QA.md) for the tier ladder and gates.
 Private game copies, dumps, logs and machine-specific notes belong in `local/`
 and must never be distributed.
@@ -160,6 +170,7 @@ python tools/damage_test.py --suite
 python tools/input_test.py --suite
 python tools/session_test.py --suite
 python tools/steam_host_test.py
+python tools/coop_host_test.py
 python tools/test_harness.py
 python tools/harness_steam_test.py
 ```
@@ -190,9 +201,10 @@ actors, and keep actor identity/health across the office-to-dungeon transition.
 Its ignored-snapshot mutation must fail only the intended client.
 `tools/test_harness.py` builds and runs the standalone 480 harness over UDP; the
 same-account Steam lobby/join/P2P smoke is `tools/harness_steam_test.py`.
-`tools/steam_host_test.py` verifies in-game host-only lobby creation under the
-real AppID. See [the M2 notes](docs/M2-STEAM.md). These are not a playable online
-session.
+`tools/steam_host_test.py` verifies the probe host-only lobby; `tools/coop_host_test.py`
+verifies the production `SteamCoop` host controller, minimizing the window when
+`xdotool` is available. See [the M2 notes](docs/M2-STEAM.md) and the
+[playtest guide](docs/PLAYTEST.md). These are not a finished online co-op run.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
 
 ### Test tiers
@@ -206,6 +218,7 @@ python tools/verify.py                 # offline tests/scorers only; no game lau
 python tools/verify.py --quick         # offline + build + loader + input positive gate
 python tools/verify.py --quick --focus net-damage
 python tools/verify.py --stages steam-host
+python tools/verify.py --stages coop-host
 python tools/verify.py --stages net-input,controllers
 python tools/verify.py --list
 python tools/verify.py --integration   # full 18-stage milestone regression
@@ -233,6 +246,18 @@ python tools/two_instance_test.py --windowed
 
 Starts two isolated clients on the same Steam account and verifies both reach the
 title screen concurrently. This is a startup/isolation spike, not networking.
+
+## Try the Steam co-op build
+
+```sh
+python tools/play_coop.py
+```
+
+This launches the **isolated modded copy**, not the Steam library install. The
+isolated profile has a copy of the main save, so **Continue** resumes mid-story.
+Open **ESC -> Co-op** or press **F7**; the original Steam install and save remain
+untouched. To refresh the test save, use `tools/copy_save.py`. See the
+[playtest guide](docs/PLAYTEST.md).
 
 ## Try P2 with a controller
 

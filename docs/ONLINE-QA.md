@@ -165,7 +165,7 @@ before and after.
    [scope and limits](O2-INPUT.md). The full 16-stage v0.10.0 regression passed
    afterward. The current stage list is 18 stages: `session-core` and
    `session-loopback` were added for M1, and the full 18-stage run has not been
-   rerun as a single pass. The v0.12.0 quick run passed 8/8 including the M1
+   rerun as a single pass. The v0.13.0 quick run passed 8/8 including the M1
    positive gate.
 
 8. **M1 persistent session core — implemented and passing.**
@@ -185,7 +185,14 @@ before and after.
     harness run with one shared session, one peer and `state=Playing`. In-game
     host-only lobby creation under AppID 1154810 passes. The in-game
     distinct-account session, acceptance UI, launch-from-invite and the
-    relay-socket decision remain.
+    relay-socket decision remain. The production `SteamCoop` F7/ESC-tab
+    controller has a passing minimized host-only smoke and a member list with
+    invite/kick controls.
+11. **M3 player replication — foundation started.** The expanded action/camera/
+    inventory command, `NetworkInputState`, command-backed seat input and a
+    per-client `view_ok` gate pass on v0.13.0. Host action authority,
+    animation/effect replication, party HUD and party-tethered room
+    transitions remain. See [M3 notes](M3-PLAYER.md).
 
 ## Late validation with a friend
 

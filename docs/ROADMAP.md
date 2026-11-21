@@ -20,6 +20,10 @@ production Steam integration is in progress.
   implemented and pass two distinct accounts through the harness; in-game
   host-only lobby creation under AppID 1154810 passes. In-game distinct-account
   session, invite UI and the relay-socket decision remain.
+- **M3 — foundation started.** Expanded input command, network-input state,
+  command-backed seat input and a per-client camera/HUD view gate pass on
+  v0.13.0. Action authority, animation, party HUD and party-tethered room
+  transitions remain.
 
 ## Definition of done for v1
 
@@ -31,16 +35,19 @@ and a co-op save that resumes later. Disconnects are handled explicitly. A 30–
 minute session does not desync, hang or duplicate damage/loot.
 
 Explicit non-goals for v1: dedicated servers, host migration, matchmaking with
-strangers, PvP, anti-cheat, split-screen online hybrid, mod API.
+strangers, PvP, anti-cheat, split-screen dual-camera/dual-HUD support, and
+independent room movement. v1 uses party-tethered rooms; see
+[the room, camera and HUD policy](ROOM-CAMERA-PLAN.md).
 
 ## 1. Baseline: what is actually proven today
 
 | Area | Evidence |
 | --- | --- |
-| Loader, Proton, Steam auth, isolated installs/saves | 16-stage regression at v0.10.0; v0.12.0 quick 8/8; full 18-stage not rerun |
+| Loader, Proton, Steam auth, isolated installs/saves | 16-stage regression at v0.10.0; v0.13.0 quick 8/8; full 18-stage not rerun |
 | Persistent session core (M1) | Two real clients, shared epoch, snapshots, interpolation, actor/health survival across a scene change; mutation control |
 | Steam adapter harness (M0a) | UDP positive/mutation; two-account lobby-id join and invite delivery/P2P under AppID 480 |
 | Steam transport/lobby (M2, in progress) | Production `SteamP2PTransport`/`SteamLobbyService`/`NetSession` two-account harness pass; in-game host-only real-AppID lobby |
+| Player replication foundation (M3) | Expanded action/camera/inventory command, `NetworkInputState`, command-backed input and per-client `view_ok` (local camera/HUD, remote camera off) |
 | Two clients on one Steam account, one machine | Coexistence gate |
 | 2–5 local actors: data, health, inventory, input, outfits | Seat suite |
 | P2 controller routing | Snapshot tests, no physical-press proof |
@@ -177,8 +184,14 @@ and the legacy-P2P versus relay-socket decision.
   sockets remain an optional upgrade; the two-account harness validates the
   legacy path.
 - `NetSession` wiring — implemented; loopback remains for deterministic suites.
-- Host/join/invite UI and acceptance callback — pending.
+- Host/join/invite UI and acceptance callback — F7 `SteamCoop` panel and ESC-menu
+  Co-op tab are implemented, including member list, invite and host kick; real
+  acceptance/launch-from-invite testing is pending.
+- Production `SteamCoop` controller — implemented; minimized real-AppID host
+  smoke passes.
 - Lobby state/ready/member-data UI — pending.
+- Each online player gets their own camera and HUD; v1 deliberately keeps the
+  party in one active room (party-wide doors/floors, boss/arena co-location).
 - Handle host leaving, guest leaving, lobby full, invite expired, version mismatch
   — partly implemented in the service; full UI/error coverage pending.
 
@@ -186,12 +199,18 @@ Exit gate: two machines over Steam, invite accepted, both reach the office, see 
 other move with interpolation, and one leaves cleanly. Evidence includes RTT and a
 5-minute no-desync run. This is the first true L3/L4 evidence.
 
-### M3 — Player replication and first playable co-op (size: XL)
+### M3 — Player replication and first playable co-op (size: XL) — FOUNDATION
 
-Goal: two humans can play together, not just stand together.
+Goal: two humans can play together, not just stand together. Each client has
+its own camera/HUD; rooms stay party-tethered.
+
+Started: expanded `InputCommand` (actions, camera, inventory), `NetworkInputState`,
+command-backed `LocalSeats` input, remote actor wiring, and a real-game
+`view_ok` check. Action authority and animation remain.
 
 - Host-authoritative actions: attack, alt attack, dodge, block, throw, interact,
-  pickup, inventory slot changes, weapon use, revive input.
+  pickup, inventory slot changes, weapon use, revive input. Command plumbing is
+  started; native action authority is not yet wired.
 - Player state replication: health, armor, weapon/durability, status effects,
   equipment visuals, animation/action state.
 - Client prediction and reconciliation for movement; interpolation for everyone
@@ -199,7 +218,8 @@ Goal: two humans can play together, not just stand together.
 - Remote puppet presentation: animation graph parameters, weapon visuals, footstep
   and hit effects.
 - Per-player HUD: health/armor, inventory, currency, connection quality.
-- Per-client camera; keep the existing shared-camera local prototype separate.
+- Per-client camera: each client follows its own local actor; remote cameras
+  stay disabled. Keep the existing shared-camera local prototype separate.
 - Scene loading contract: host drives the load, clients load the same scene, inputs
   frozen until all ready; failure to load is a visible error, not a hang.
 
@@ -235,6 +255,9 @@ Goal: it is a run, not a sandbox.
   `CameraController.ShakeRoutine`. If not deterministic, host sends a layout
   manifest (rooms, special floors, seeds) and clients build from it.
 - Floor transitions: all-ready barrier, epoch bump, stale-scene rejection, loading UI.
+- Party-tethered door/floor transitions: either player can initiate, but both
+  players move through together; block or leash the other player rather than
+  splitting the room context.
 - Loot and currency: host-arbitrated pickups, one owner per item, atomic purchases,
   physical item ownership; shared vs per-player currency decided in §7.
 - Down/revive: downed state, revive interaction and timing, interruption rules;
@@ -273,6 +296,13 @@ profile; no divergence beyond tolerance; memory flat; no duplicate damage/loot.
   with a readable message; publish a support matrix.
 - Crash/log bundle, privacy note, and known-issues list.
 - Honest QA level, README and coop-anything write-up/PR **only with owner approval**.
+
+### M8 — Independent rooms (Option B, post-v1, size: XL)
+
+See [the room, camera and HUD policy](ROOM-CAMERA-PLAN.md). This is not a v1
+gate: it requires per-player room identity, room occupancy/refcounts,
+per-player door transitions, multi-room host simulation, and local-room
+audio/lighting/minimap. Boss/arena rooms stay party-locked.
 
 ## 5. Cross-cutting workstreams
 

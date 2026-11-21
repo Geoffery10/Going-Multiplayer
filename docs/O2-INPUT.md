@@ -7,7 +7,7 @@ This covers movement input only. It is not full O2 and not playable online co-op
 
 Current note (2026-11-21): M1 adds a persistent session core and actor
 interpolation around these O2 primitives, but O2's scope is unchanged. The
-v0.12.0 quick regression passed 8/8 and the M1 suite passed on that build; the
+v0.13.0 quick regression passed 8/8 and the M1 suite passed on that build; the
 full 18-stage run has not been rerun since M1 was added.
 
 ## What is proven

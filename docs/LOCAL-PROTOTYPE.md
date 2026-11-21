@@ -7,10 +7,10 @@ transport exists only inside test probes and is not a production session.
 ## Current status (2026-11-21)
 
 The table below is the historical v0.6.0 local-prototype baseline. Current
-v0.12.0 adds the M1 persistent session core, actor interpolation/scene survival,
-the M0a standalone Steam harness and the first M2 Steam transport/lobby
-integration. Current evidence is in the root README, `docs/ROADMAP.md` and
-`docs/M2-STEAM.md`; the latest quick regression passed 8/8 on v0.12.0, and the
+v0.13.0 adds the M1 persistent session core, actor interpolation/scene survival,
+the M0a standalone Steam harness, the first M2 Steam transport/lobby
+integration and the M3 input/view foundation. Current evidence is in the root README, `docs/ROADMAP.md` and
+`docs/M2-STEAM.md`; the latest quick regression passed 8/8 on v0.13.0, and the
 full 18-stage run has not been rerun since M1 was added.
 
 ## Verified build (local-prototype baseline, v0.6.0)
@@ -158,7 +158,9 @@ python tools/play_local.py
 ```
 
 This opens only the isolated copy with separate saves and a one-hour safety
-limit (`--minutes 30` changes it). Close the game window to finish. A fresh
+limit (`--minutes 30` changes it). For Steam co-op, use
+`python tools/play_coop.py` and open **ESC -> Co-op** or **F7**; the Steam
+library install is not modded. Close the game window to finish. A fresh
 Proton profile can take longer to start than subsequent launches. Development
 encountered a cold-profile startup timeout that succeeded after relaunching;
 this remains a known startup limitation.
