@@ -25,7 +25,8 @@ RESULT = re.compile(
     r"dungeon_delta=([-\d.]+) actor_alive=(True|False) "
     r"health_kept=(True|False) attack_host=(True|False) "
     r"attack_local=(True|False) cmd_sent=(\d+) cmd_recv=(\d+) "
-    r"view_ok=(True|False) "
+    r"recon_delta=([-\d.]+) recon_corrections=(\d+) recon_hard=(\d+) "
+    r"recon_error=([-\d.]+) view_ok=(True|False) "
     r"ready_barrier=(True|False) done_barrier=(True|False) "
     r"negative=(True|False) scene=(\S+)")
 
@@ -37,6 +38,7 @@ def parse(text, run_id):
     (status, run, role, session, epoch, local_id, remote_id, peers, sent,
      received, rejected, stale, remote_delta, dungeon_delta, actor_alive,
      health_kept, attack_host, attack_local, cmd_sent, cmd_recv,
+     recon_delta, recon_corrections, recon_hard, recon_error,
      view_ok, ready_barrier, done_barrier, negative, scene) = matches[0]
     if run != run_id:
         return None
@@ -50,6 +52,10 @@ def parse(text, run_id):
         "health_kept": health_kept == "True",
         "attack_host": attack_host == "True",
         "attack_local": attack_local == "True",
+        "recon_delta": float(recon_delta),
+        "recon_corrections": int(recon_corrections),
+        "recon_hard": int(recon_hard),
+        "recon_error": float(recon_error),
         "cmd_sent": int(cmd_sent), "cmd_recv": int(cmd_recv),
         "view_ok": view_ok == "True",
         "ready_barrier": ready_barrier == "True",
@@ -102,6 +108,12 @@ def score_pair(host_text, guest_text, run_id, host_result, guest_result, negativ
                 and not host["negative"]
                 and not host["attack_host"])
 
+    if negative == "recon":
+        return (host["status"] == "PASS" and guest["status"] == "FAIL"
+                and guest_result["exit_code"] == 1
+                and guest["recon_delta"] < 0.5
+                and guest["recon_corrections"] == 0)
+
     if host["status"] != "PASS" or guest["status"] != "PASS":
         return False
     if host_result["exit_code"] != 0 or guest_result["exit_code"] != 0:
@@ -112,7 +124,8 @@ def score_pair(host_text, guest_text, run_id, host_result, guest_result, negativ
             and host["dungeon_delta"] > 0.05 and guest["dungeon_delta"] > 0.05
             and host["attack_host"] and host["cmd_recv"] >= 1
             and guest["cmd_sent"] >= 1 and not guest["attack_local"]
-            and not host["attack_local"])
+            and not host["attack_local"]
+            and guest["recon_corrections"] >= 1 and guest["recon_error"] <= 0.5)
 
 
 def free_port():
@@ -131,6 +144,8 @@ def start_client(profile, install, proton, role, port, run_id, negative):
         arguments.append("-gmp-session-negative")
     if negative == "command" and role == "host":
         arguments.append("-gmp-session-cmd-negative")
+    if negative == "recon" and role == "guest":
+        arguments.append("-gmp-session-recon-negative")
     folder, invocation = command(profile, proton, arguments,
                                  install=install, windowed=True)
     log = (folder / "logs/session.log").open("w")
@@ -199,7 +214,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--proton", type=Path, default=DEFAULT_PROTON)
     parser.add_argument("--timeout", type=int, default=300)
-    parser.add_argument("--negative", choices=["snapshot", "command"], default=None)
+    parser.add_argument("--negative", choices=["snapshot", "command", "recon"],
+                        default=None)
     parser.add_argument("--suite", action="store_true",
                         help="Positive gate, then the ignored-snapshot mutation")
     args = parser.parse_args()
@@ -214,6 +230,8 @@ def main():
             results.append(run_gate(args.proton, args.timeout, "snapshot"))
             time.sleep(5)
             results.append(run_gate(args.proton, args.timeout, "command"))
+            time.sleep(5)
+            results.append(run_gate(args.proton, args.timeout, "recon"))
     passed = all(result["passed"] for result in results)
     summary = {"scope": "M1 long-session suite; NOT online co-op",
                "passed": passed, "gates": results}

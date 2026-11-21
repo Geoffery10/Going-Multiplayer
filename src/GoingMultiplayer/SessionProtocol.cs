@@ -95,6 +95,9 @@ namespace GoingMultiplayer
     // transport and binds only to 127.0.0.1.
     internal sealed class LoopbackTransport : ITransport
     {
+        internal static int Sent;
+        internal static int SendFailed;
+        internal static int Received;
         private Socket socket;
         private IPEndPoint hostEndpoint;
         private bool isHost;
@@ -144,6 +147,7 @@ namespace GoingMultiplayer
                 Buffer.BlockCopy(buffer, 0, data, 0, count);
                 packet.Peer = from.ToString();
                 packet.Data = data;
+                Received++;
                 return true;
             }
             catch (SocketException) { return false; }
@@ -158,10 +162,11 @@ namespace GoingMultiplayer
             try
             {
                 socket.SendTo(data, target);
+                Sent++;
                 return true;
             }
-            catch (SocketException) { return false; }
-            catch (ObjectDisposedException) { return false; }
+            catch (SocketException) { SendFailed++; return false; }
+            catch (ObjectDisposedException) { SendFailed++; return false; }
         }
 
         private IPEndPoint Resolve(string peer)
@@ -579,6 +584,8 @@ namespace GoingMultiplayer
         internal Action<Peer> PeerJoined = delegate { };
         internal Action<Peer> PeerLeft = delegate { };
         internal Action<Peer, PlayerSnapshot> SnapshotReceived = delegate { };
+        // Host-published state for this client's own actor (server correction).
+        internal Action<PlayerSnapshot> OwnSnapshotReceived = delegate { };
         internal Action<Peer, InputCommand> CommandReceived = delegate { };
         internal Action<SessionState> StateChanged = delegate { };
         internal Action<Peer> Kicked = delegate { };
@@ -796,7 +803,11 @@ namespace GoingMultiplayer
                 Rejected++;
                 return;
             }
-            if (epoch != Epoch || playerId != peer.PlayerId)
+            // A peer may only speak for itself, except that the host is the
+            // authority for the guest's own actor (server correction).
+            bool identityOk = playerId == peer.PlayerId
+                || (!IsHost && peer.IsHost && playerId == LocalPlayerId);
+            if (epoch != Epoch || !identityOk)
             {
                 Rejected++;
                 return;
@@ -817,7 +828,11 @@ namespace GoingMultiplayer
                     return;
                 }
                 SnapshotsReceived++;
-                if (SnapshotReceived != null) SnapshotReceived(peer, snapshot);
+                if (playerId == LocalPlayerId)
+                {
+                    if (OwnSnapshotReceived != null) OwnSnapshotReceived(snapshot);
+                }
+                else if (SnapshotReceived != null) SnapshotReceived(peer, snapshot);
             }
             else if (type == MessageType.Command)
             {

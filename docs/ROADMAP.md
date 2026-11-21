@@ -24,8 +24,10 @@ production Steam integration is in progress.
   state, command-backed seat input and a per-client camera/HUD view gate pass.
   The host now simulates the guest actor from 30 Hz commands and a session gate
   proves one native Attack plus command-driven movement with two mutation
-  twins. Prediction/reconciliation, the remaining actions, animation, party HUD
-  and party-tethered room transitions remain.
+  twins. The guest is corrected toward the host's authoritative pose
+  (deadband + hard snap) with its own gate and twin. Rollback prediction, the
+  remaining actions, animation, party HUD and party-tethered room transitions
+  remain.
 
 ## Definition of done for v1
 

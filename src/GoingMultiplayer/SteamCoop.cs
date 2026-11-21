@@ -381,6 +381,11 @@ namespace GoingMultiplayer
                 {
                     ActorRegistry.ApplySnapshot(peer.PlayerId, snapshot);
                 };
+                session.OwnSnapshotReceived += delegate(PlayerSnapshot snapshot)
+                {
+                    // The host's authoritative pose for this player.
+                    Reconciliation.Apply(Player.singlePlayer, snapshot);
+                };
                 session.CommandReceived += delegate(Peer peer, InputCommand command)
                 {
                     // Only the host replays guest commands; the guest renders the

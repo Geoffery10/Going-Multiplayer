@@ -26,7 +26,7 @@ in progress). Not a playable online co-op release.**
 | Persistent session core (M1) | Production transport seam, binary session protocol, peer registry and epoch/sequence validation; two real clients share a session, replicate poses, interpolate remote actors and keep an actor's network id and health across the office-to-dungeon transition. Positive and ignored-snapshot mutation gates passed. This uses the test-only loopback transport, not Steam. |
 | Steam adapter harness (M0a) | Standalone harness under AppID 480: UDP positive/mutation passed; Steam lobby creation, join and P2P ping/pong passed both on one account and between two accounts (`members=2`, ~10–15 ms RTT) across a Proton/Wine host and a Windows guest. Lobby-id join and invite delivery with harness auto-accept passed. The real in-game invite-accept callback/UI remains an M2 check; no in-game Steam session is claimed. |
 | Steam transport/lobby (M2, in progress) | `SteamP2PTransport` and `SteamLobbyService` implement a production-shaped Steam path over legacy P2P. Two distinct accounts passed through the harness `--transport m2` mode with one shared session, one peer and `state=Playing`. The production `SteamCoop` controller, F7 panel and an ESC-menu Co-op tab now create a real-AppID lobby, list players, and provide host/invite/leave/kick controls; the minimized host smoke passed with the tab installed. Full in-game distinct-account session/playtest, animation and relay-socket choice remain. See [M2 notes](docs/M2-STEAM.md) and the [playtest guide](docs/PLAYTEST.md). |
-| Player replication foundation (M3, started) | Expanded action/camera/inventory input command, `NetworkInputState`, command-backed `LocalSeats` input path and a real-game per-client view gate. The host now simulates the guest actor from 30 Hz commands; a session gate proves native Attack and command-driven movement with two mutation twins. Each client reports local camera active, remote camera disabled and HUD bound to the local player. Prediction, the remaining actions, animation, party HUD and party-tethered transitions remain. See [M3 notes](docs/M3-PLAYER.md). |
+| Player replication foundation (M3, started) | Expanded action/camera/inventory input command, `NetworkInputState`, command-backed `LocalSeats` input path and a real-game per-client view gate. The host now simulates the guest actor from 30 Hz commands; the guest is corrected toward the host's authoritative pose. Session gates prove native Attack, command-driven movement and reconciliation, each with a mutation twin. Each client reports local camera active, remote camera disabled and HUD bound to the local player. Prediction, the remaining actions, animation, party HUD and party-tethered transitions remain. See [M3 notes](docs/M3-PLAYER.md). |
 
 The loopback suite passed its positive gate and three intentional-failure controls
 (disabled pose application, accepted stale state and accepted host-id claims).
@@ -41,7 +41,7 @@ host-authoritative gameplay**, prediction, lag tolerance or a production session
   **22 production input-command checks** pass.
 - **v0.13.0 quick regression passed 8/8 stages** (offline, build, loader, M1
   positive) with DLL SHA-256
-  `e38e1b312d4fa1111ab2d4e91c532d8cd35d309c946de9143050da9f3fc2ddb9`.
+  `76a9b868071c73e4188d8d8ebb2dd06bcf467c61ff0f34a9cb05add6fa847eaa`.
 - **M1 session suite passed on v0.13.0**: positive host/guest session with
   shared epoch, ready/done barriers, snapshots, scene actor survival and
   per-client `view_ok`; the ignored-snapshot mutation made only the intended

@@ -13,6 +13,8 @@ namespace GoingMultiplayer
     internal static class SessionProbe
     {
         private const float MoveSeconds = 2.5f;
+        private static int simulatedSends;
+        private static float lastActorSnapshot;
         private const float SnapshotInterval = 0.05f;
 
         internal static IEnumerator Run(Plugin plugin, string runId, string role, int port,
@@ -37,7 +39,9 @@ namespace GoingMultiplayer
             LocalSeats.Install();
             bool negative = Array.IndexOf(Environment.GetCommandLineArgs(),
                 "-gmp-session-negative") >= 0;
-            int received = 0, rejected = 0, stale = 0;
+            bool reconNegative = Array.IndexOf(Environment.GetCommandLineArgs(),
+                "-gmp-session-recon-negative") >= 0;
+            int received = 0, rejected = 0, stale = 0, ownSnapshots = 0;
             session.SnapshotReceived += delegate(Peer peer, PlayerSnapshot snapshot)
             {
                 received++;
@@ -46,6 +50,15 @@ namespace GoingMultiplayer
                     plugin.Report("GMP_SESSION_SNAP role=" + role + " peer=" + peer.PlayerId
                         + " n=" + received + " x=" + Fmt(snapshot.X)
                         + " z=" + Fmt(snapshot.Z));
+            };
+            session.OwnSnapshotReceived += delegate(PlayerSnapshot snapshot)
+            {
+                ownSnapshots++;
+                if (ownSnapshots <= 3)
+                    plugin.Report("GMP_SESSION_OWN_SNAP role=" + role
+                        + " n=" + ownSnapshots + " x=" + Fmt(snapshot.X)
+                        + " z=" + Fmt(snapshot.Z));
+                if (!reconNegative) Reconciliation.Apply(Player.singlePlayer, snapshot);
             };
             bool commandNegative = Array.IndexOf(Environment.GetCommandLineArgs(),
                 "-gmp-session-cmd-negative") >= 0;
@@ -225,6 +238,50 @@ namespace GoingMultiplayer
             // Neutral command so a held attack does not chain on the host.
             if (!isHost) session.SendCommand(new InputCommand(),
                 Time.realtimeSinceStartup);
+
+            // M3a reconciliation gate: the guest keeps its local player still
+            // while still commanding the host to walk, so the two poses diverge.
+            // The host's authoritative snapshots must pull the guest back.
+            Reconciliation.Reset();
+            Vector3 reconStart = local.transform.position;
+            // Manufacture a divergence the host did not authorise: shove the
+            // guest's local player sideways. The host's snapshots must pull it
+            // back to the authoritative pose.
+            Vector3 drift = reconStart + new Vector3(3.5f, 0f, 0f);
+            local.transform.position = drift;
+            if (local.rb) local.rb.position = drift;
+            float lastReconCommand = -2f;
+            float lastReconSnapshot = -1f;
+            float reconEnd = Time.realtimeSinceStartup + 2f;
+            while (Time.realtimeSinceStartup < reconEnd)
+            {
+                localSeat.Move = Vector2.zero;
+                lastReconSnapshot = SendIfDue(session, local, lastReconSnapshot);
+                if (!isHost)
+                    lastReconCommand = SendCommandIfDue(session,
+                        new InputCommand { MoveX = 1f }, lastReconCommand);
+                Pump(session);
+                yield return null;
+            }
+            localSeat.Move = Vector2.zero;
+            if (!isHost) session.SendCommand(new InputCommand(),
+                Time.realtimeSinceStartup);
+            float reconDelta = XZDistance(drift, local.transform.position);
+            int reconCorrections = Reconciliation.Corrections;
+            int reconHard = Reconciliation.HardSnaps;
+            float reconError = Reconciliation.Corrections > 0
+                ? Vector3.Distance(local.transform.position, Reconciliation.LastAuthoritative)
+                : XZDistance(local.transform.position, drift);
+            plugin.Report("GMP_SESSION_RECON role=" + role
+                + " recon_delta=" + Fmt(reconDelta)
+                + " corrections=" + reconCorrections
+                + " hard=" + reconHard
+                + " error=" + Fmt(reconError)
+                + " own_snaps=" + ownSnapshots
+                + " sim_sends=" + simulatedSends
+                + " tx=" + LoopbackTransport.Sent
+                + " tx_fail=" + LoopbackTransport.SendFailed
+                + " rx=" + LoopbackTransport.Received);
             int actionSent = session.CommandsSent - commandsSentBefore;
             int actionReceived = session.CommandsReceived - commandsReceivedBefore;
             plugin.Report("GMP_SESSION_ACTION role=" + role
@@ -327,7 +384,8 @@ namespace GoingMultiplayer
                 && dungeonDelta > 0.05f
                 && (isHost
                     ? hostSawAttack && actionReceived >= 1
-                    : !localSawAttack && actionSent >= 1);
+                    : !localSawAttack && actionSent >= 1)
+                && (isHost || (reconCorrections >= 1 && reconError <= 0.5f));
             plugin.Report("GMP_SESSION_RESULT " + (pass ? "PASS" : "FAIL")
                 + " run=" + runId + " role=" + role
                 + " session=" + (session.SessionId ?? "none")
@@ -346,6 +404,10 @@ namespace GoingMultiplayer
                 + " attack_host=" + hostSawAttack
                 + " attack_local=" + localSawAttack
                 + " cmd_sent=" + actionSent + " cmd_recv=" + actionReceived
+                + " recon_delta=" + Fmt(reconDelta)
+                + " recon_corrections=" + reconCorrections
+                + " recon_hard=" + reconHard
+                + " recon_error=" + Fmt(reconError)
                 + " view_ok=" + viewOk
                 + " ready_barrier=" + readyBarrier + " done_barrier=" + doneBarrier
                 + " negative=" + negative
@@ -367,6 +429,7 @@ namespace GoingMultiplayer
                 + " rejected=" + session.Rejected + " stale=" + session.Stale
                 + " remote_delta=0 dungeon_delta=0 actor_alive=False health_kept=False"
                 + " attack_host=False attack_local=False cmd_sent=0 cmd_recv=0"
+                + " recon_delta=0 recon_corrections=0 recon_hard=0 recon_error=0"
                 + " view_ok=False ready_barrier=False done_barrier=False"
                 + " negative=" + (Array.IndexOf(Environment.GetCommandLineArgs(),
                     "-gmp-session-negative") >= 0)
@@ -381,6 +444,17 @@ namespace GoingMultiplayer
             float now = Time.realtimeSinceStartup;
             if (now - lastSend < SnapshotInterval) return lastSend;
             session.SendSnapshot(ActorRegistry.Capture(local), now);
+            // The host also publishes actors it simulates for a guest, at half
+            // the rate so the two streams do not arrive as back-to-back bursts.
+            if (now - lastActorSnapshot < SnapshotInterval * 2f) return now;
+            lastActorSnapshot = now;
+            foreach (NetworkActor actor in ActorRegistry.All)
+                if (actor.Simulated && actor.Seat != null && actor.Seat.Player)
+                {
+                    session.SendSnapshotFor(actor.PlayerId,
+                        ActorRegistry.Capture(actor.Seat.Player), now);
+                    simulatedSends++;
+                }
             return now;
         }
 

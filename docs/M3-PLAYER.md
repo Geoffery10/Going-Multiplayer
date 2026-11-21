@@ -19,7 +19,7 @@ Status: **foundation started**, v0.13.0, 2026-11-21. Not a playable M3 slice yet
   - HUD bound to the local `Player.singlePlayer`.
 - M1 suite passes on v0.13.0 with `view_ok=True` on both clients; quick
   regression passes 8/8. DLL SHA-256
-  `e38e1b312d4fa1111ab2d4e91c532d8cd35d309c946de9143050da9f3fc2ddb9`.
+  `76a9b868071c73e4188d8d8ebb2dd06bcf467c61ff0f34a9cb05add6fa847eaa`.
   The ESC Co-op tab uses the game's own card sprite, fonts and capsule buttons
   (cloned from the settings menu) instead of an IMGUI overlay.
 - `SessionCoreTests` covers the expanded command codec and network-input
@@ -43,10 +43,29 @@ Status: **foundation started**, v0.13.0, 2026-11-21. Not a playable M3 slice yet
   fail as expected: `--negative command` (host ignores commands) and
   `--negative snapshot` (guest ignores host snapshots).
 
+## Reconciliation (2026-11-21)
+
+- The host publishes the guest's actor as an authority snapshot
+  (`SendSnapshotFor`), delivered through a separate `OwnSnapshotReceived`
+  callback so it cannot be confused with a peer's own pose.
+- `Reconciliation.Apply` pulls the guest's locally simulated player back toward
+  that pose: no correction inside a 0.75 unit deadband, a 15% step (max 0.6) for
+  small errors, and a hard snap above 3 units.
+- The deadband is sized for 20 Hz snapshots at walking speed; there is no
+  rollback or input replay yet, so this is correction, not full prediction.
+- Session identity rule: a peer may only speak for itself, except that the host
+  may publish the guest's own player id. A guest claiming the host's id is
+  rejected (unit-tested).
+- Gate: the guest's local player is shoved 3.5 units off its authoritative pose
+  while it keeps commanding the host to walk; the guest must apply at least one
+  correction and end within 0.5 units of the authority. Twin:
+  `--negative recon` (guest ignores its own snapshots) fails with 0 corrections.
+
 ## Not implemented yet
 
-- No client prediction/reconciliation: the guest still simulates its own player
-  while the host simulates it from commands, so the two views can drift.
+- No rollback/prediction: the guest simulates locally and is corrected when the
+  error exceeds the deadband; there is no input replay or smoothing of the
+  correction.
 - Only attack has been exercised through the authority path; dodge, interact,
   throw, focus and inventory are plumbed but not gated.
 - Remote actors can still run local-only effects (camera snap on focus) because
@@ -65,9 +84,10 @@ Status: **foundation started**, v0.13.0, 2026-11-21. Not a playable M3 slice yet
 2. ~~Gate one action (`Attack`) on the host actor with the guest not acting.~~
    `Focus`, `Dodge`, `Interact` and inventory need the same gates.
 3. Mutation twins: ~~host ignores commands~~, ~~guest ignores snapshots~~,
-   dropped/stale command and wrong player still to add.
-4. Client prediction/reconciliation for the guest's own actor is the next slice;
-   actions are intentionally not predicted yet.
+   ~~guest ignores authority snapshots~~; dropped/stale command and wrong player
+   still to add.
+4. ~~Reconciliation for the guest's own actor.~~ Rollback/prediction and
+   correction smoothing remain; actions are intentionally not predicted yet.
 
 ### M3b — animation and HUD
 

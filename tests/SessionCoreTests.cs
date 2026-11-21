@@ -153,6 +153,29 @@ internal static class SessionCoreTests
         Check(Math.Abs(receivedByGuest[receivedByGuest.Count - 1].X - 10f) < 0.001f, "host snapshot value");
         Check(Math.Abs(receivedByHost[receivedByHost.Count - 1].X + 2f) < 0.001f, "guest snapshot value");
 
+        // The host is the authority for the guest's own actor: it may publish a
+        // snapshot with the guest's player id, delivered separately.
+        var ownSnapshots = new List<PlayerSnapshot>();
+        guest.OwnSnapshotReceived += delegate(PlayerSnapshot snapshot) { ownSnapshots.Add(snapshot); };
+        int guestPeerCountBefore = receivedByGuest.Count;
+        var authoritative = new PlayerSnapshot { X = -7f, Y = 1f, Z = 2f, Yaw = 90f };
+        for (int i = 0; i < 5; i++)
+        {
+            host.SendSnapshotFor(2, authoritative, now);
+            Pump(host, guest, ref now);
+        }
+        Check(ownSnapshots.Count == 5, "host authority snapshot delivered");
+        Check(receivedByGuest.Count == guestPeerCountBefore, "authority snapshot is not a peer snapshot");
+        Check(Math.Abs(ownSnapshots[0].X + 7f) < 0.001f, "authority snapshot value");
+
+        // A guest may not claim the host's player id.
+        int hostRejectedBefore = host.Rejected;
+        int hostPeerCountBefore = receivedByHost.Count;
+        guest.SendSnapshotFor(1, new PlayerSnapshot { X = 42f }, now);
+        Pump(host, guest, ref now);
+        Check(host.Rejected > hostRejectedBefore, "guest cannot spoof host snapshot");
+        Check(receivedByHost.Count == hostPeerCountBefore, "spoofed snapshot not applied");
+
         // Duplicate and wrong-player packets must not be applied.
         int before = receivedByHost.Count;
         Peer hostPeer = null;
