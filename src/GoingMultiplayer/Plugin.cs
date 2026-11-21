@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.15.1")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.15.2")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -46,7 +46,7 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.15.1 networking=steam_coop");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.15.2 networking=steam_coop");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             startupProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-startup-probe") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;

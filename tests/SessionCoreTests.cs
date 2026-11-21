@@ -194,6 +194,13 @@ internal static class SessionCoreTests
         Check(announced == "Dungeon_Joblin", "scene announcement");
         Check(announcedSeed == 424242, "scene seed");
 
+        // Guest scene intent reaches the host.
+        string intent = null;
+        host.SceneIntentReceived += delegate(string scene) { intent = scene; };
+        guest.SendSceneIntent("Dungeon_Joblin", now);
+        Pump(host, guest, ref now);
+        Check(intent == "Dungeon_Joblin", "scene intent");
+
         // A guest may not claim the host's player id.
         int hostRejectedBefore = host.Rejected;
         int hostPeerCountBefore = receivedByHost.Count;

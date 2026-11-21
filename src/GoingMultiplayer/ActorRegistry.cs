@@ -163,7 +163,7 @@ namespace GoingMultiplayer
             if (player.rb) player.rb.isKinematic = true;
             RemotePuppet puppet = player.GetComponent<RemotePuppet>();
             if (puppet == null) puppet = player.gameObject.AddComponent<RemotePuppet>();
-            puppet.Initialize(player);
+            puppet.Initialize(player, actor.Seat.Network);
             actor.Puppet = puppet;
         }
     }
@@ -184,16 +184,23 @@ namespace GoingMultiplayer
         private const float InterpolationDelay = 0.1f;
         private readonly List<Sample> samples = new List<Sample>();
         private Player player;
+        private NetworkInputState network;
         private Vector3 lastApplied;
+        private static System.Reflection.FieldInfo inputVectorField;
 
         internal Vector3 LastApplied { get { return lastApplied; } }
         internal int Pushed;
         internal int Updated;
 
-        internal void Initialize(Player value)
+        internal void Initialize(Player value, NetworkInputState state)
         {
             player = value;
+            network = state;
             lastApplied = value.transform.position;
+            if (inputVectorField == null)
+                inputVectorField = typeof(Player).GetField("inputVector",
+                    System.Reflection.BindingFlags.Instance
+                    | System.Reflection.BindingFlags.NonPublic);
         }
 
         internal void Push(Vector3 position, float yaw, float health, byte animation)
@@ -244,6 +251,19 @@ namespace GoingMultiplayer
                 player.rb.velocity = Vector3.zero;
             }
             lastApplied = position;
+            FeedAnimation();
+        }
+
+        // The puppet cannot run movement, but its native animator still needs an
+        // input vector. Feed it the peer's command in the peer's control basis so
+        // walking/idle match what the other player sees on their own screen.
+        private void FeedAnimation()
+        {
+            if (inputVectorField == null || network == null) return;
+            Vector3 raw = new Vector3(network.Command.MoveX, 0f, network.Command.MoveY);
+            raw = Vector3.ClampMagnitude(raw, 1f);
+            Vector3 world = Quaternion.Euler(0f, network.ControlYaw, 0f) * raw;
+            inputVectorField.SetValue(player, world);
         }
     }
 }

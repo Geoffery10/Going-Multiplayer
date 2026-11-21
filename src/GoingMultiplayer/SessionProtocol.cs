@@ -23,6 +23,7 @@ namespace GoingMultiplayer
         Kick = 10,
         Save = 11,
         Scene = 12,
+        SceneIntent = 13,
     }
 
     internal struct PlayerSnapshot
@@ -307,6 +308,29 @@ namespace GoingMultiplayer
                     WriteString(writer, scene);
                     writer.Write(seed);
                 });
+        }
+
+        internal static byte[] SceneIntent(ushort protocol, uint epoch, int playerId,
+            uint sequence, string scene)
+        {
+            return Build(MessageType.SceneIntent, protocol, epoch, playerId, sequence,
+                delegate(BinaryWriter writer) { WriteString(writer, scene); });
+        }
+
+        internal static bool TrySceneIntent(byte[] data, out string scene)
+        {
+            scene = null;
+            try
+            {
+                using (var reader = OpenBody(data, MessageType.SceneIntent))
+                {
+                    if (reader == null) return false;
+                    scene = ReadString(reader);
+                    return !string.IsNullOrEmpty(scene);
+                }
+            }
+            catch (IOException) { return false; }
+            catch (ArgumentException) { return false; }
         }
 
         internal static bool TryScene(byte[] data, out string scene, out int seed)
@@ -668,6 +692,7 @@ namespace GoingMultiplayer
         internal Action<Peer, InputCommand> CommandReceived = delegate { };
         internal Action<byte[]> SaveReceived = delegate { };
         internal Action<string, int> SceneReceived = delegate { };
+        internal Action<string> SceneIntentReceived = delegate { };
         internal Action<SessionState> StateChanged = delegate { };
         internal Action<Peer> Kicked = delegate { };
 
@@ -772,6 +797,19 @@ namespace GoingMultiplayer
                 foreach (Peer peer in Peers.All)
                     if (peer.Connected) transport.Send(peer.Key, packet, true);
             }
+        }
+
+        // A guest that opened a door itself asks the host to take the party
+        // through the same transition instead of being pulled back.
+        internal void SendSceneIntent(string scene, double now)
+        {
+            if (string.IsNullOrEmpty(scene)) return;
+            if (State != SessionState.Playing) return;
+            sequence++;
+            byte[] data = SessionCodec.SceneIntent(config.ProtocolVersion, Epoch,
+                LocalPlayerId, sequence, scene);
+            foreach (Peer peer in Peers.All)
+                if (peer.Connected) transport.Send(peer.Key, data, true);
         }
 
         internal void SendScene(string scene, int seed, double now)
@@ -965,6 +1003,16 @@ namespace GoingMultiplayer
                     return;
                 }
                 if (SceneReceived != null) SceneReceived(scene, seed);
+            }
+            else if (type == MessageType.SceneIntent)
+            {
+                string scene;
+                if (!SessionCodec.TrySceneIntent(packet.Data, out scene))
+                {
+                    Rejected++;
+                    return;
+                }
+                if (SceneIntentReceived != null) SceneIntentReceived(scene);
             }
             else if (type == MessageType.Command)
             {

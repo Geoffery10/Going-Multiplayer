@@ -28,6 +28,7 @@ namespace GoingMultiplayer
         private float lastCommand = -1f;
         private bool initialSyncSent;
         private string pendingScene;
+        private string hostScene;
         private bool forcedBackground;
         private float lastSceneBeat;
         private float lastStats;
@@ -366,6 +367,17 @@ namespace GoingMultiplayer
         {
             pauseTabInstalled = false;
             if (session == null || state != CoopState.Running) return;
+            if (!isHost && session.State == SessionState.Playing)
+            {
+                string guestScene = UnityEngine.SceneManagement.SceneManager
+                    .GetActiveScene().name;
+                if (!string.IsNullOrEmpty(hostScene) && guestScene != hostScene)
+                {
+                    session.SendSceneIntent(guestScene, Time.realtimeSinceStartup);
+                    plugin.Report("GMP_COOP_SCENE_INTENT name=" + guestScene
+                        + " host=" + hostScene);
+                }
+            }
             if (isHost && session.State == SessionState.Playing)
             {
                 string scene = UnityEngine.SceneManagement.SceneManager
@@ -446,9 +458,10 @@ namespace GoingMultiplayer
                 };
                 session.CommandReceived += delegate(Peer peer, InputCommand command)
                 {
-                    // Only the host replays guest commands; the guest renders the
-                    // host from snapshots.
-                    if (!isHost) return;
+                    // The host simulates the guest from these commands. The
+                    // guest also feeds them to the host's puppet: its transform
+                    // stays snapshot-driven, but the native animator gets the
+                    // real input, so the host's animations are visible.
                     NetworkActor actor = ActorRegistry.Get(peer.PlayerId);
                     if (actor != null && actor.Seat != null && actor.Seat.Network != null)
                         actor.Seat.Network.Apply(command, peer.LastSequence);
@@ -467,8 +480,29 @@ namespace GoingMultiplayer
                 session.SceneReceived += delegate(string scene, int seed)
                 {
                     if (isHost) return;
+                    hostScene = scene;
                     if (seed != 0) SceneSync.PendingSeed = seed;
                     ApplyHostScene(scene);
+                };
+                session.SceneIntentReceived += delegate(string scene)
+                {
+                    if (!isHost) return;
+                    if (string.IsNullOrEmpty(scene))
+                    {
+                        return;
+                    }
+                    if (string.Equals(scene, UnityEngine.SceneManagement.SceneManager
+                        .GetActiveScene().name, StringComparison.Ordinal))
+                    {
+                        return;
+                    }
+                    if (!Application.CanStreamedLevelBeLoaded(scene))
+                    {
+                        plugin.Report("GMP_COOP_INTENT_MISSING name=" + scene);
+                        return;
+                    }
+                    plugin.Report("GMP_COOP_INTENT_FOLLOW name=" + scene);
+                    GUIManager.instance.LoadScene(scene);
                 };
                 session.Kicked += delegate(Peer peer) { kicked = true; };
                 session.PeerLeft += delegate(Peer peer)

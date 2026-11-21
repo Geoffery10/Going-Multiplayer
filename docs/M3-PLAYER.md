@@ -43,6 +43,21 @@ Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet
   fail as expected: `--negative command` (host ignores commands) and
   `--negative snapshot` (guest ignores host snapshots).
 
+## Animation and door tether (2026-11-21)
+
+- Peer commands are now applied on both sides. The host still simulates the
+  guest; the guest feeds the host's commands to the host puppet, whose transform
+  stays snapshot-driven. `RemotePuppet` also writes the command into the
+  player's native `inputVector`, so `UpdateAnimator` runs the real walking,
+  strafing and attack poses. Before this only the host saw animations, because
+  only its copy was simulated.
+- A guest that opens a scene-changing door sends a **scene intent**; the host
+  performs the same transition, then re-announces the scene and seed, so the
+  party moves together instead of the guest being pulled back.
+- Room-to-room doors inside a floor do not change scenes; they depend on the
+  host replaying the guest's interact command, which is unverified in a real
+  session.
+
 ## Background running and session health (2026-11-21)
 
 - `Host`/`Join` set `Application.runInBackground = true` and `Stop` restores it.

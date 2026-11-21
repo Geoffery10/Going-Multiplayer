@@ -105,8 +105,9 @@ automatically once Steam is ready.
 
 ## Known limits
 
-- Only the host can change rooms/floors. If the guest takes a door, the host's
-  2-second scene heartbeat pulls them back rather than following.
+- Scene-changing doors (elevator/floors) move the whole party: the guest's
+  transition is forwarded to the host, which performs it and re-announces.
+  Room-to-room doors are host-replayed and not yet verified with two players.
 - The window can be unfocused: co-op keeps running (and so does the game).
 
 - No host-authoritative actions yet: attack, dodge, throw, interact, focus and
