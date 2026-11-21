@@ -388,7 +388,9 @@ namespace GoingMultiplayer
             // Manufacture a divergence the host did not authorise: shove the
             // guest's local player sideways. The host's snapshots must pull it
             // back to the authoritative pose.
-            Vector3 drift = reconStart + new Vector3(3.5f, 0f, 0f);
+            // Well past the 3-unit recovery threshold so the gate is not
+            // sensitive to a little physics drift.
+            Vector3 drift = reconStart + new Vector3(6f, 0f, 0f);
             local.transform.position = drift;
             if (local.rb) local.rb.position = drift;
             float lastReconCommand = -2f;

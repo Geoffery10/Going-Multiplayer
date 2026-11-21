@@ -2,17 +2,22 @@ using UnityEngine;
 
 namespace GoingMultiplayer
 {
-    // Server reconciliation for the guest's own player. The host simulates the
-    // guest from its commands; the guest also runs its own player locally for
-    // responsiveness. When the authoritative pose drifts past a deadband the
-    // guest is pulled back, gently for small errors and by a hard snap for large
-    // ones.
+    // Desync recovery for the guest's own player. The host simulates the guest
+    // from its commands; the guest also runs its own player locally for
+    // responsiveness.
     //
-    // Deliberately not rollback: there is no input history yet. 30 Hz commands
-    // and a 0.75 unit deadband keep ordinary walking from rubber-banding.
+    // This is deliberately NOT a continuous correction. An earlier version
+    // pulled the guest toward the host's copy whenever they were more than 0.75
+    // units apart, which acted as a leash: in the office the guest could not
+    // walk away from the host without being dragged back. Small lag between two
+    // moving players is expected (roughly speed x RTT), so it is ignored; only
+    // a real divergence, such as the host's copy being blocked or left behind,
+    // triggers a recovery glide.
     internal static class Reconciliation
     {
-        internal const float Deadband = 0.75f;
+        // Recovery threshold. Below this the guest is left alone: ordinary
+        // walking lag stays well under it.
+        internal const float Deadband = 3f;
         internal const float HardSnapDistance = 3f;
         internal const float SoftSpeed = 8f;
         internal const float MaxSpeed = 60f;

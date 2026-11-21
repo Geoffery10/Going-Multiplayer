@@ -100,9 +100,10 @@ Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet
 - The host publishes the guest's actor as an authority snapshot
   (`SendSnapshotFor`), delivered through a separate `OwnSnapshotReceived`
   callback so it cannot be confused with a peer's own pose.
-- `Reconciliation.Apply` pulls the guest's locally simulated player back toward
-  that pose: no correction inside a 0.75 unit deadband, a 15% step (max 0.6) for
-  small errors, and a hard snap above 3 units.
+- `Reconciliation.Apply` is desync recovery, not a leash: no correction at all
+  below a 3 unit error, then a fast glide (speed scales with the error, up to
+  60 u/s). Ordinary lag between two moving players is roughly speed x RTT and
+  stays well under the threshold, so walking is never dragged back.
 - The deadband is sized for 20 Hz snapshots at walking speed; there is no
   rollback or input replay yet, so this is correction, not full prediction.
 - Session identity rule: a peer may only speak for itself, except that the host
