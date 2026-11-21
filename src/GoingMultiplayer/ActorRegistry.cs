@@ -17,6 +17,9 @@ namespace GoingMultiplayer
         internal float LastHealth;
         internal byte Animation;
         internal bool Persistent;
+        // The host simulates a guest's actor from its commands; everyone else
+        // renders that actor from snapshots.
+        internal bool Simulated;
     }
 
     // Maps a session player id to a Unity actor. Local actors are owned by this
@@ -36,7 +39,8 @@ namespace GoingMultiplayer
             actors.Clear();
         }
 
-        internal static NetworkActor AddRemote(Player local, int playerId, Vector3 position)
+        internal static NetworkActor AddRemote(Player local, int playerId, Vector3 position,
+            bool simulate = false)
         {
             if (playerId <= 0) throw new ArgumentOutOfRangeException("playerId");
             if (actors.ContainsKey(playerId)) throw new InvalidOperationException("Duplicate actor id");
@@ -50,8 +54,10 @@ namespace GoingMultiplayer
                 Persistent = true,
                 LastPosition = position,
                 LastHealth = seat.Player.health,
+                Simulated = simulate,
             };
-            PreparePuppet(actor);
+            if (simulate) PrepareSimulated(actor);
+            else PreparePuppet(actor);
             actors[playerId] = actor;
             return actor;
         }
@@ -102,6 +108,8 @@ namespace GoingMultiplayer
         {
             NetworkActor actor;
             if (!actors.TryGetValue(playerId, out actor)) return;
+            // Never let a peer's snapshot fight an actor this host simulates.
+            if (actor.Simulated) return;
             actor.LastPosition = new Vector3(snapshot.X, snapshot.Y, snapshot.Z);
             actor.LastYaw = snapshot.Yaw;
             actor.LastHealth = snapshot.Health;
@@ -131,8 +139,20 @@ namespace GoingMultiplayer
                     actor.Seat.Player.rb.position = target;
                     actor.Seat.Player.rb.velocity = Vector3.zero;
                 }
-                PreparePuppet(actor);
+                if (actor.Simulated) PrepareSimulated(actor);
+                else PreparePuppet(actor);
             }
+        }
+
+        internal static void PrepareSimulated(NetworkActor actor)
+        {
+            Player player = actor.Seat.Player;
+            player.LockMovement(false);
+            player.SetPhysicalCollidersActive(true);
+            if (player.rb) player.rb.isKinematic = false;
+            RemotePuppet puppet = player.GetComponent<RemotePuppet>();
+            if (puppet != null) UnityEngine.Object.Destroy(puppet);
+            actor.Puppet = null;
         }
 
         private static void PreparePuppet(NetworkActor actor)

@@ -25,12 +25,32 @@ Status: **foundation started**, v0.13.0, 2026-11-21. Not a playable M3 slice yet
 - `SessionCoreTests` covers the expanded command codec and network-input
   clamping/edges: 31 checks.
 
+## Command/action authority (2026-11-21)
+
+- The host now simulates the guest's actor from its commands: `InputCapture`
+  samples the local player's real input, `SteamCoop` sends it at 30 Hz, and the
+  host applies it through the remote seat's patched `PlayerInputRewired`.
+- `ActorRegistry.AddRemote(..., simulate)` creates the guest actor unlocked with
+  physics on the host; the guest keeps a snapshot puppet of the host.
+- `NetworkInputState` gives presses/releases one-frame edge semantics (30 Hz
+  commands would otherwise repeat attacks or double-toggle focus), including
+  inventory steps.
+- `NetSession` uses one sender sequence across snapshots and commands, and the
+  host publishes snapshots for the actors it simulates.
+- Gate: guest sends MoveX and an Attack press over the real session; the host
+  reports `attack_host=True` from the guest actor's native state and command
+  driven `remote_delta`; the guest reports `attack_local=False`. Mutation twins
+  fail as expected: `--negative command` (host ignores commands) and
+  `--negative snapshot` (guest ignores host snapshots).
+
 ## Not implemented yet
 
-- The production session does not yet send commands from the guest; the probe
-  only exercises the command boundary.
-- No host-authoritative action gate: attack, dodge, interact, throw, focus and
-  inventory actions still use local input.
+- No client prediction/reconciliation: the guest still simulates its own player
+  while the host simulates it from commands, so the two views can drift.
+- Only attack has been exercised through the authority path; dodge, interact,
+  throw, focus and inventory are plumbed but not gated.
+- Remote actors can still run local-only effects (camera snap on focus) because
+  `Player.Update` is shared.
 - No client prediction/reconciliation for actions.
 - No animation-state snapshot; one-shot triggers, weapons and effects are not
   replicated.
@@ -39,16 +59,15 @@ Status: **foundation started**, v0.13.0, 2026-11-21. Not a playable M3 slice yet
 
 ## Next slices
 
-### M3a — action authority
+### M3a — action authority (started)
 
-1. Send `InputCommand` at 30–60 Hz from the guest; host validates sequence and
-   applies it to the remote `NetworkInputState`.
-2. Add a real-game gate for one safe action (`Focus` first, then `Attack`,
-   `Dodge`, `Interact`) proving the host actor's native input sees the command
-   and the guest does not simulate it.
-3. Add mutation twins: dropped command, stale command, wrong player, local
-   guest simulation.
-4. Keep movement prediction separate; do not predict actions yet.
+1. ~~Send `InputCommand` at 30–60 Hz; host applies it to `NetworkInputState`.~~
+2. ~~Gate one action (`Attack`) on the host actor with the guest not acting.~~
+   `Focus`, `Dodge`, `Interact` and inventory need the same gates.
+3. Mutation twins: ~~host ignores commands~~, ~~guest ignores snapshots~~,
+   dropped/stale command and wrong player still to add.
+4. Client prediction/reconciliation for the guest's own actor is the next slice;
+   actions are intentionally not predicted yet.
 
 ### M3b — animation and HUD
 

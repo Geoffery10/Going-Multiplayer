@@ -20,10 +20,12 @@ production Steam integration is in progress.
   implemented and pass two distinct accounts through the harness; in-game
   host-only lobby creation under AppID 1154810 passes. In-game distinct-account
   session, invite UI and the relay-socket decision remain.
-- **M3 — foundation started.** Expanded input command, network-input state,
-  command-backed seat input and a per-client camera/HUD view gate pass on
-  v0.13.0. Action authority, animation, party HUD and party-tethered room
-  transitions remain.
+- **M3 — action authority started.** Expanded input command, network-input
+  state, command-backed seat input and a per-client camera/HUD view gate pass.
+  The host now simulates the guest actor from 30 Hz commands and a session gate
+  proves one native Attack plus command-driven movement with two mutation
+  twins. Prediction/reconciliation, the remaining actions, animation, party HUD
+  and party-tethered room transitions remain.
 
 ## Definition of done for v1
 

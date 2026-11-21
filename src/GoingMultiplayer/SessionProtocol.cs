@@ -515,6 +515,9 @@ namespace GoingMultiplayer
         private double lastHello;
         private double lastPing;
         private bool disposed;
+        // One sender sequence for every message type. The receiver keeps a
+        // single per-peer sequence, so snapshots and commands must share it.
+        private uint sequence;
 
         internal NetSession(SessionConfig config, ITransport transport, Func<uint> epochSource = null)
         {
@@ -641,10 +644,18 @@ namespace GoingMultiplayer
 
         internal void SendSnapshot(PlayerSnapshot snapshot, double now)
         {
+            SendSnapshotFor(LocalPlayerId, snapshot, now);
+        }
+
+        // The host also publishes snapshots for actors it simulates on behalf of
+        // a guest, so the guest can render its own puppet from the authority.
+        internal void SendSnapshotFor(int playerId, PlayerSnapshot snapshot, double now)
+        {
             if (State != SessionState.Playing && State != SessionState.Hosting) return;
-            LastSnapshotSequence++;
-            byte[] data = SessionCodec.Snapshot(config.ProtocolVersion, Epoch, LocalPlayerId,
-                LastSnapshotSequence, snapshot);
+            sequence++;
+            LastSnapshotSequence = sequence;
+            byte[] data = SessionCodec.Snapshot(config.ProtocolVersion, Epoch, playerId,
+                sequence, snapshot);
             foreach (Peer peer in Peers.All)
                 if (peer.Connected) transport.Send(peer.Key, data, false);
             SnapshotsSent++;
@@ -653,9 +664,10 @@ namespace GoingMultiplayer
         internal void SendCommand(InputCommand command, double now)
         {
             if (State != SessionState.Playing && State != SessionState.Hosting) return;
-            LastCommandSequence++;
+            sequence++;
+            LastCommandSequence = sequence;
             byte[] data = SessionCodec.Command(config.ProtocolVersion, Epoch, LocalPlayerId,
-                LastCommandSequence, command);
+                sequence, command);
             foreach (Peer peer in Peers.All)
                 if (peer.Connected) transport.Send(peer.Key, data, true);
             CommandsSent++;

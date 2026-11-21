@@ -47,8 +47,11 @@ namespace GoingMultiplayer
                         + " n=" + received + " x=" + Fmt(snapshot.X)
                         + " z=" + Fmt(snapshot.Z));
             };
+            bool commandNegative = Array.IndexOf(Environment.GetCommandLineArgs(),
+                "-gmp-session-cmd-negative") >= 0;
             session.CommandReceived += delegate(Peer peer, InputCommand command)
             {
+                if (!isHost || commandNegative) return;
                 NetworkActor target = ActorRegistry.Get(peer.PlayerId);
                 if (target != null && target.Seat != null && target.Seat.Network != null)
                     target.Seat.Network.Apply(command, peer.LastSequence);
@@ -94,7 +97,7 @@ namespace GoingMultiplayer
             if (!local) { Fail(plugin, session, runId, role, "no local player", received, rejected, stale, mode); yield break; }
             int remoteId = isHost ? 2 : 1;
             Vector3 remoteSpawn = FindSpawn(local);
-            NetworkActor remote = ActorRegistry.AddRemote(local, remoteId, remoteSpawn);
+            NetworkActor remote = ActorRegistry.AddRemote(local, remoteId, remoteSpawn, isHost);
             bool localCamera = Camera.main != null && Camera.main.isActiveAndEnabled;
             bool remoteCamera = false;
             foreach (Camera camera in remote.Seat.Player.GetComponentsInChildren<Camera>(true))
@@ -109,6 +112,11 @@ namespace GoingMultiplayer
                 + Fmt(remote.Seat.Player.transform.position.z)
                 + " local=" + Fmt(local.transform.position.x) + ","
                 + Fmt(local.transform.position.z));
+            plugin.Report("GMP_SESSION_REMOTE_STATE role=" + role
+                + " charging=" + remote.Seat.Player.charging
+                + " attacking=" + remote.Seat.Player.view.attacking
+                + " windingUp=" + remote.Seat.Player.view.windingUp
+                + " simulated=" + remote.Simulated);
             LocalSeats.Seat localSeat = LocalSeats.ScriptLocalInput(local);
             local.LockMovement(false);
             local.forceMove = true;
@@ -117,10 +125,14 @@ namespace GoingMultiplayer
 
             float moveEnd = Time.realtimeSinceStartup + MoveSeconds;
             float lastSend = -1f;
+            float lastWalk = -2f;
             while (Time.realtimeSinceStartup < moveEnd)
             {
                 localSeat.Move = new Vector2(1f, 0f);
                 lastSend = SendIfDue(session, local, lastSend);
+                if (!isHost)
+                    lastWalk = SendCommandIfDue(session,
+                        new InputCommand { MoveX = 1f }, lastWalk);
                 Pump(session);
                 yield return null;
             }
@@ -130,6 +142,9 @@ namespace GoingMultiplayer
                 Time.realtimeSinceStartup < settle;)
             {
                 lastSend = SendIfDue(session, local, lastSend);
+                if (!isHost)
+                    lastWalk = SendCommandIfDue(session,
+                        new InputCommand { MoveX = 0f }, lastWalk);
                 Pump(session);
                 yield return null;
             }
@@ -157,6 +172,68 @@ namespace GoingMultiplayer
                 + " remote_now=" + Fmt(remote.Seat.Player.transform.position.x) + ","
                 + Fmt(remote.Seat.Player.transform.position.z) + " remote_delta="
                 + Fmt(remoteDelta) + " received=" + received);
+
+            // M3a action gate: only the guest sends an Attack command. On the host
+            // that command must drive the guest actor through its native input
+            // path; the guest's own player must not act on it locally.
+            Player hostActor = isHost ? remote.Seat.Player : null;
+            if (hostActor) hostActor.LockMovement(false);
+            local.LockMovement(false);
+            int commandsSentBefore = session.CommandsSent;
+            int commandsReceivedBefore = session.CommandsReceived;
+            // Let any previous action finish so a stale swing is not read as ours.
+            for (float clean = Time.realtimeSinceStartup + 2f;
+                Time.realtimeSinceStartup < clean && hostActor != null
+                && (hostActor.charging || hostActor.view.attacking);)
+            {
+                Pump(session);
+                yield return null;
+            }
+            bool hostClean = hostActor == null
+                || (!hostActor.charging && !hostActor.view.attacking);
+            bool hostSawAttack = false;
+            bool localSawAttack = false;
+            int attackAttempts = 0;
+            float lastAttack = -2f;
+            float actionEnd = Time.realtimeSinceStartup + 2.5f;
+            while (Time.realtimeSinceStartup < actionEnd)
+            {
+                float actionNow = Time.realtimeSinceStartup;
+                if (hostActor) hostActor.LockMovement(false);
+                if (!isHost && actionNow - lastAttack >= 0.5f)
+                {
+                    session.SendCommand(new InputCommand
+                    {
+                        Held = PlayerButtons.Attack,
+                        Pressed = PlayerButtons.Attack,
+                    }, actionNow);
+                    lastAttack = actionNow;
+                    attackAttempts++;
+                }
+                Pump(session);
+                bool attackedNow = hostActor
+                    && (hostActor.charging || hostActor.view.attacking);
+                // Only count a transition that follows a command in this window.
+                if (hostClean && attackedNow
+                    && session.CommandsReceived > commandsReceivedBefore)
+                    hostSawAttack = true;
+                localSawAttack |= local.charging || local.view.attacking;
+                if (hostSawAttack) break;
+                if (!isHost && attackAttempts >= 4) break;
+                yield return null;
+            }
+            // Neutral command so a held attack does not chain on the host.
+            if (!isHost) session.SendCommand(new InputCommand(),
+                Time.realtimeSinceStartup);
+            int actionSent = session.CommandsSent - commandsSentBefore;
+            int actionReceived = session.CommandsReceived - commandsReceivedBefore;
+            plugin.Report("GMP_SESSION_ACTION role=" + role
+                + " attack_host=" + hostSawAttack
+                + " attack_local=" + localSawAttack
+                + " cmd_sent=" + actionSent + " cmd_recv=" + actionReceived
+                + " attempts=" + attackAttempts
+                + " host_clean=" + hostClean
+                + " host_actor=" + (hostActor != null));
 
             // Give the remote actor a distinct state, then change scene. The
             // data holder must survive and the scene object must rebind.
@@ -247,7 +324,10 @@ namespace GoingMultiplayer
                 && remoteDelta > 0.25f
                 && actorAlive
                 && healthKept
-                && dungeonDelta > 0.05f;
+                && dungeonDelta > 0.05f
+                && (isHost
+                    ? hostSawAttack && actionReceived >= 1
+                    : !localSawAttack && actionSent >= 1);
             plugin.Report("GMP_SESSION_RESULT " + (pass ? "PASS" : "FAIL")
                 + " run=" + runId + " role=" + role
                 + " session=" + (session.SessionId ?? "none")
@@ -263,6 +343,9 @@ namespace GoingMultiplayer
                 + " dungeon_delta=" + Fmt(dungeonDelta)
                 + " actor_alive=" + actorAlive
                 + " health_kept=" + healthKept
+                + " attack_host=" + hostSawAttack
+                + " attack_local=" + localSawAttack
+                + " cmd_sent=" + actionSent + " cmd_recv=" + actionReceived
                 + " view_ok=" + viewOk
                 + " ready_barrier=" + readyBarrier + " done_barrier=" + doneBarrier
                 + " negative=" + negative
@@ -283,6 +366,7 @@ namespace GoingMultiplayer
                 + " sent=" + session.SnapshotsSent + " received=" + received
                 + " rejected=" + session.Rejected + " stale=" + session.Stale
                 + " remote_delta=0 dungeon_delta=0 actor_alive=False health_kept=False"
+                + " attack_host=False attack_local=False cmd_sent=0 cmd_recv=0"
                 + " view_ok=False ready_barrier=False done_barrier=False"
                 + " negative=" + (Array.IndexOf(Environment.GetCommandLineArgs(),
                     "-gmp-session-negative") >= 0)
@@ -297,6 +381,15 @@ namespace GoingMultiplayer
             float now = Time.realtimeSinceStartup;
             if (now - lastSend < SnapshotInterval) return lastSend;
             session.SendSnapshot(ActorRegistry.Capture(local), now);
+            return now;
+        }
+
+        private static float SendCommandIfDue(NetSession session, InputCommand command,
+            float lastSent)
+        {
+            float now = Time.realtimeSinceStartup;
+            if (now - lastSent < SnapshotInterval) return lastSent;
+            session.SendCommand(command, now);
             return now;
         }
 

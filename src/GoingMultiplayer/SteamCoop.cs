@@ -25,6 +25,7 @@ namespace GoingMultiplayer
         private string status = "Steam co-op idle. Press F7 for the panel.";
         private string build;
         private float lastSnapshot = -1f;
+        private float lastCommand = -1f;
         private int remoteId;
         private NetworkActor remote;
         private bool kicked;
@@ -219,7 +220,21 @@ namespace GoingMultiplayer
             if (now - lastSnapshot >= 0.05f)
             {
                 session.SendSnapshot(ActorRegistry.Capture(local), now);
+                if (isHost)
+                {
+                    // The host owns the guest's actor; publish its state so the
+                    // guest can render its own puppet from the authority.
+                    foreach (NetworkActor actor in ActorRegistry.All)
+                        if (actor.Simulated && actor.Seat != null && actor.Seat.Player)
+                            session.SendSnapshotFor(actor.PlayerId,
+                                ActorRegistry.Capture(actor.Seat.Player), now);
+                }
                 lastSnapshot = now;
+            }
+            if (now - lastCommand >= 0.033f)
+            {
+                session.SendCommand(InputCapture.From(local), now);
+                lastCommand = now;
             }
         }
 
@@ -368,6 +383,9 @@ namespace GoingMultiplayer
                 };
                 session.CommandReceived += delegate(Peer peer, InputCommand command)
                 {
+                    // Only the host replays guest commands; the guest renders the
+                    // host from snapshots.
+                    if (!isHost) return;
                     NetworkActor actor = ActorRegistry.Get(peer.PlayerId);
                     if (actor != null && actor.Seat != null && actor.Seat.Network != null)
                         actor.Seat.Network.Apply(command, peer.LastSequence);
@@ -417,7 +435,7 @@ namespace GoingMultiplayer
                 Vector3 spawn;
                 try { spawn = SeatProbe.FindSpawn(local); }
                 catch (Exception) { spawn = local.transform.position + new Vector3(1.5f, 0f, 0f); }
-                remote = ActorRegistry.AddRemote(local, remoteId, spawn);
+                remote = ActorRegistry.AddRemote(local, remoteId, spawn, isHost);
                 status = "Connected to the other player.";
                 plugin.Report("GMP_COOP_REMOTE role=" + (isHost ? "host" : "guest")
                     + " local_id=" + session.LocalPlayerId + " remote_id=" + remoteId);
@@ -445,6 +463,7 @@ namespace GoingMultiplayer
             lobby.Leave();
             state = CoopState.Idle;
             lastSnapshot = -1f;
+            lastCommand = -1f;
         }
 
         private void Fail(string reason)

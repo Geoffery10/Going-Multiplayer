@@ -401,6 +401,7 @@ namespace GoingMultiplayer
 
         private void Update()
         {
+            NetworkInputState.Frame = Time.frameCount;
             if (coop != null)
             {
                 coop.Tick();
