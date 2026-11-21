@@ -54,7 +54,7 @@ def main():
             str(path.relative_to(ROOT)): hashlib.file_digest(path.open("rb"), "sha256").hexdigest()
             for path in references + sources
         },
-        "status": "Experimental local-actor prototype; online multiplayer not implemented.",
+        "status": "Experimental local prototype and test-only session core; online multiplayer not implemented.",
     }
     (LOCAL / "plugin-build.json").write_text(json.dumps(record, indent=2) + "\n")
     if args.deploy_test:

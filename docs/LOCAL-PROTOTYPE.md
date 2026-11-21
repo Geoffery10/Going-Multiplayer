@@ -4,9 +4,18 @@ This is a local prototype plus a two-process **test-only loopback** milestone,
 not an online/co-op release or split-screen implementation. The loopback
 transport exists only inside test probes and is not a production session.
 
-## Verified build
+## Current status (2026-11-21)
 
-Version **0.6.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
+The table below is the historical v0.6.0 local-prototype baseline. Current
+v0.12.0 adds the M1 persistent session core, actor interpolation/scene survival,
+the M0a standalone Steam harness and the first M2 Steam transport/lobby
+integration. Current evidence is in the root README, `docs/ROADMAP.md` and
+`docs/M2-STEAM.md`; the latest quick regression passed 8/8 on v0.12.0, and the
+full 18-stage run has not been rerun since M1 was added.
+
+## Verified build (local-prototype baseline, v0.6.0)
+
+Windows Steam build **20206372**, Unity **2018.4.24f1**:
 
 | Check | Result |
 | --- | --- |
@@ -28,9 +37,10 @@ Version **0.6.0**, Windows Steam build **20206372**, Unity **2018.4.24f1**:
 | Detected controller ownership, neutral polling and restoration | PASS with two compatible gamepads |
 | Original game file integrity | 207 files checked, zero changes |
 
-The gates listed were run individually after this change; a full
-`python tools/verify.py --integration` rerun is pending. These results establish
-only the specific local-state, pickup, movement and targeting checks below, not
+These gates were run individually for the v0.6.0 baseline. Later M1/M0a work and
+the current regression tiers are summarized in the root README; the full
+18-stage integration has not been rerun since M1. These results establish only
+the specific local-state, pickup, movement and targeting checks below, not
 online or complete roguelike mechanics.
 Controller action tests used deterministic snapshots; physical button presses
 and full controller combat have not been verified.

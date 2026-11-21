@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.10.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.12.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -25,6 +25,14 @@ namespace GoingMultiplayer
         private bool netBrainProbe;
         private bool netDamageProbe;
         private bool netInputProbe;
+        private bool sessionProbe;
+        private bool steamProbe;
+        private string steamRole = "host";
+        private ulong steamLobby;
+        private ulong steamInvite;
+        private bool steamHostOnly;
+        private string sessionRole = "host";
+        private int sessionPort;
         private bool netNegative;
         private bool netStaleNegative;
         private bool netAuthorityNegative;
@@ -34,7 +42,7 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.10.0 networking=loopback_test_only");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.12.0 networking=loopback_test_only");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             startupProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-startup-probe") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
@@ -44,6 +52,9 @@ namespace GoingMultiplayer
             netBrainProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-brain-probe") >= 0;
             netDamageProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-damage-probe") >= 0;
             netInputProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-input-probe") >= 0;
+            sessionProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-session-probe") >= 0;
+            steamProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-steam-probe") >= 0;
+            steamHostOnly = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-steam-host-only") >= 0;
             netAiProbe |= netBrainProbe;
             netNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-negative") >= 0;
             netStaleNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-stale-negative") >= 0;
@@ -60,6 +71,16 @@ namespace GoingMultiplayer
                     netRole = argument.Substring("-gmp-net=".Length);
                 else if (argument.StartsWith("-gmp-net-port=", StringComparison.Ordinal))
                     netPort = int.Parse(argument.Substring("-gmp-net-port=".Length));
+                else if (argument.StartsWith("-gmp-session=", StringComparison.Ordinal))
+                    sessionRole = argument.Substring("-gmp-session=".Length);
+                else if (argument.StartsWith("-gmp-session-port=", StringComparison.Ordinal))
+                    sessionPort = int.Parse(argument.Substring("-gmp-session-port=".Length));
+                else if (argument.StartsWith("-gmp-steam-role=", StringComparison.Ordinal))
+                    steamRole = argument.Substring("-gmp-steam-role=".Length);
+                else if (argument.StartsWith("-gmp-steam-lobby=", StringComparison.Ordinal))
+                    ulong.TryParse(argument.Substring("-gmp-steam-lobby=".Length), out steamLobby);
+                else if (argument.StartsWith("-gmp-steam-invite=", StringComparison.Ordinal))
+                    ulong.TryParse(argument.Substring("-gmp-steam-invite=".Length), out steamInvite);
             }
             foreach (char character in runId)
                 if (!char.IsLetterOrDigit(character) && character != '-' && character != '_')
@@ -78,7 +99,7 @@ namespace GoingMultiplayer
                 hooksFound = false;
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (smokeMode || seatProbe || targetProbe || netProbe || netAiProbe || netDamageProbe
-                || netInputProbe)
+                || netInputProbe || sessionProbe || steamProbe)
                 TestStartup.Install(this,
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-normal-startup") < 0);
             if (localPrototype) LocalSeats.Install();
@@ -100,6 +121,16 @@ namespace GoingMultiplayer
             {
                 yield return StartCoroutine(RunTargetProbe(
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-target-negative") >= 0));
+                yield break;
+            }
+            if (sessionProbe)
+            {
+                yield return StartCoroutine(RunSessionProbe());
+                yield break;
+            }
+            if (steamProbe)
+            {
+                yield return StartCoroutine(RunSteamProbe());
                 yield break;
             }
             if (netProbe || netAiProbe || netDamageProbe || netInputProbe)
@@ -165,6 +196,69 @@ namespace GoingMultiplayer
                 {
                     Logger.LogError("GMP_TARGET_EXCEPTION " + failure);
                     Report("GMP_TARGET_EXCEPTION run=" + runId + " " + failure.GetType().Name
+                        + ": " + failure.Message);
+                    Application.Quit(1);
+                    yield break;
+                }
+                if (!next) yield break;
+                yield return probe.Current;
+            }
+        }
+
+        private IEnumerator RunSteamProbe()
+        {
+            if (steamRole != "host" && steamRole != "guest")
+            {
+                Report("GMP_STEAM_EXCEPTION run=" + runId + " invalid role " + steamRole);
+                Application.Quit(1);
+                yield break;
+            }
+            IEnumerator probe = SteamSessionProbe.Run(this, runId, steamRole,
+                steamLobby, steamInvite, steamHostOnly);
+            while (true)
+            {
+                bool next = false;
+                Exception failure = null;
+                try { next = probe.MoveNext(); }
+                catch (Exception exception) { failure = exception; }
+                if (failure != null)
+                {
+                    Logger.LogError("GMP_STEAM_EXCEPTION " + failure);
+                    Report("GMP_STEAM_EXCEPTION run=" + runId + " " + failure.GetType().Name
+                        + ": " + failure.Message);
+                    Application.Quit(1);
+                    yield break;
+                }
+                if (!next) yield break;
+                yield return probe.Current;
+            }
+        }
+
+        private IEnumerator RunSessionProbe()
+        {
+            if (sessionRole != "host" && sessionRole != "guest")
+            {
+                Report("GMP_SESSION_EXCEPTION run=" + runId + " invalid role " + sessionRole);
+                Application.Quit(1);
+                yield break;
+            }
+            if (sessionPort < 1024 || sessionPort > 65535)
+            {
+                Report("GMP_SESSION_EXCEPTION run=" + runId + " invalid port " + sessionPort);
+                Application.Quit(1);
+                yield break;
+            }
+            IEnumerator probe = SessionProbe.Run(this, runId, sessionRole, sessionPort);
+            while (true)
+            {
+                bool next = false;
+                Exception failure = null;
+                try { next = probe.MoveNext(); }
+                catch (Exception exception) { failure = exception; }
+                if (failure != null)
+                {
+                    Logger.LogError("GMP_SESSION_EXCEPTION " + failure);
+                    Report("GMP_SESSION_EXCEPTION run=" + runId + " " + failure.GetType().Name
                         + ": " + failure.Message);
                     Application.Quit(1);
                     yield break;
@@ -262,7 +356,7 @@ namespace GoingMultiplayer
         {
             Logger.LogInfo(text);
             if (seatProbe || smokeMode || targetProbe || netProbe || netAiProbe || netDamageProbe
-                || netInputProbe)
+                || netInputProbe || sessionProbe || steamProbe)
                 File.AppendAllText(Path.Combine(BepInEx.Paths.GameRootPath, "gmp-trace-" + runId + ".log"),
                     text + Environment.NewLine);
         }

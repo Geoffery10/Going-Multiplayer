@@ -1,13 +1,17 @@
 # Two-player online testing strategy
 
-Status: L1 local-actor gates and the first L2 loopback session/movement/packet
-rejection and scoped native enemy-movement gates have passed. This is a development strategy, not evidence of
-playable online co-op; production transport and shared gameplay remain unfinished.
+Status: L1 local-actor gates, L2 loopback session/movement/packet-rejection
+gates, the O4 enemy slices and the O2 movement-authority suite have passed. M1
+adds a persistent loopback session core with interpolation and actor survival
+across a scene change. M0a adds a standalone 480 harness that passed UDP,
+same-account and two-account lobby/invite/P2P checks. This is a development
+strategy, not evidence of playable online co-op; the in-game Steam path and
+shared gameplay remain unfinished.
 
-Scope for now: **one owned game install, one Steam account, two players**.
-Four-player scale, Steam lobbies and a second account are deliberately deferred.
-The friend-assisted multi-machine test is a late validation step, not a
-development dependency.
+Scope for now: **one owned install and account for gameplay development, plus a
+second account for the 480 harness**. Real-AppID in-game validation (M0c/M2)
+needs a second owned copy. Four-player scale remains deferred. The
+friend-assisted multi-machine test is still a late validation step.
 
 ## Why this order
 
@@ -159,13 +163,33 @@ before and after.
    specific expected failure. This is movement only; attack/dodge/interact/
    camera, prediction and reconciliation remain local or absent. See
    [scope and limits](O2-INPUT.md). The full 16-stage v0.10.0 regression passed
-   afterward (70 Python tests at run time, 27 input checks, 16 damage-ledger
-   checks, 22 input-command checks and 0 original-file mismatches; four test-tier
-   orchestration tests pass separately afterward).
+   afterward. The current stage list is 18 stages: `session-core` and
+   `session-loopback` were added for M1, and the full 18-stage run has not been
+   rerun as a single pass. The v0.12.0 quick run passed 8/8 including the M1
+   positive gate.
+
+8. **M1 persistent session core — implemented and passing.**
+   `tools/session_test.py --suite` runs two real clients over the loopback
+   transport with the production session seam, binary protocol, peer registry,
+   epoch/sequence checks and interpolation. The positive gate keeps actor
+   identity and health across office -> dungeon; the ignored-snapshot mutation
+   fails only the intended guest. This is not Steam and not a playable session.
+9. **M0a Steam harness — implemented and passing.**
+   `tools/test_harness.py` covers UDP positive/mutation. The 480 harness passed
+   same-account Steam and two-account lobby-id join plus invite delivery/P2P
+   (`members=2`, ~10–15 ms RTT) across a Proton/Wine host and a Windows guest.
+   The guest auto-accepts with `OnLobbyInvite`; the shipping
+   `OnGameLobbyJoinRequested` acceptance callback and real AppID remain M2 work.
+10. **M2 Steam transport/lobby — started, not complete.**
+    `SteamP2PTransport` and `SteamLobbyService` pass a two-distinct-account
+    harness run with one shared session, one peer and `state=Playing`. In-game
+    host-only lobby creation under AppID 1154810 passes. The in-game
+    distinct-account session, acceptance UI, launch-from-invite and the
+    relay-socket decision remain.
 
 ## Late validation with a friend
 
-When the Steam adapter exists, prepare a small field kit:
+When the in-game Steam adapter exists, prepare a small field kit:
 
 - the mod build and install instructions;
 - a fixed host/guest scenario and run id;
@@ -180,5 +204,9 @@ small and the result comparable with L2 evidence.
 ## Not claimed
 
 The recorded L2 gates demonstrate test-only loopback functionality between two
-real clients, not internet play or shared dungeon gameplay. L3 Steam transport,
-L4 multi-machine validation and the remaining gameplay gates have not passed.
+real clients, not internet play or shared dungeon gameplay. The M0a harness
+demonstrates a test-only 480 Steam adapter between two accounts, not an in-game
+Steam session. M2 has host-only in-game lobby creation and a two-account harness
+pass, but no in-game distinct-account session. L3 in-game Steam transport under
+AppID 1154810, L4 multi-machine validation and the remaining gameplay gates have
+not passed.

@@ -19,6 +19,7 @@ namespace GoingMultiplayer
             internal Costume Costume;
             internal Material Material;
             internal bool Scripted;
+            internal bool Persistent;
             internal Vector2 Move;
             internal string Palette;
             internal ISeatPad Pad;
@@ -93,6 +94,11 @@ namespace GoingMultiplayer
 
         internal static Seat Spawn(Player local, Vector3 position, bool scripted)
         {
+            return Spawn(local, position, scripted, false);
+        }
+
+        internal static Seat Spawn(Player local, Vector3 position, bool scripted, bool persistent)
+        {
             Install();
             GameObject holder = new GameObject("GMP independent player data");
             holder.SetActive(false); // Prevent vanilla singleton Awake/Start on this data holder.
@@ -115,8 +121,15 @@ namespace GoingMultiplayer
             }
             finally { Player.singlePlayer = original; }
             if (!player || !data) throw new InvalidOperationException("Independent player/data was rejected");
-            var seat = new Seat { Player = player, Data = data, Scripted = scripted };
+            var seat = new Seat { Player = player, Data = data, Scripted = scripted, Persistent = persistent };
             Seats.Add(player, seat);
+            if (persistent)
+            {
+                // A session actor survives scene loads; ActorRegistry re-binds and
+                // repositions it after the next scene is ready.
+                Object.DontDestroyOnLoad(holder);
+                Object.DontDestroyOnLoad(player.gameObject);
+            }
             if (protectedLocal != local)
             {
                 if (protectedLocal) protectedLocal.isGrabbable = originalGrabbable;
@@ -146,6 +159,39 @@ namespace GoingMultiplayer
             }
             if (!scripted) ControllerSeats.AssignPreferred(seat);
             return seat;
+        }
+
+        // Re-create only the scene object for an existing actor. Its data holder,
+        // inventory, health and costume survive, so the network id still maps to
+        // the same gameplay state after a scene transition.
+        internal static void Respawn(Seat seat, Vector3 position)
+        {
+            if (seat == null || !seat.Data)
+                throw new InvalidOperationException("Cannot respawn an actor without data");
+            var stale = new List<Player>();
+            foreach (KeyValuePair<Player, Seat> pair in Seats)
+                if (pair.Value == seat) stale.Add(pair.Key);
+            foreach (Player old in stale) Seats.Remove(old);
+
+            Player original = Player.singlePlayer;
+            Player player;
+            try
+            {
+                Player.singlePlayer = null;
+                player = Object.Instantiate(seat.Data.playerPrefab, position, Quaternion.identity)
+                    .GetComponent<Player>();
+            }
+            finally { Player.singlePlayer = original; }
+            if (!player) throw new InvalidOperationException("Actor respawn was rejected");
+
+            seat.Player = player;
+            Seats[player] = seat;
+            if (seat.Data.input != null) Inputs[seat.Data.input] = seat;
+            player.isGrabbable = false;
+            foreach (Camera camera in player.GetComponentsInChildren<Camera>(true)) camera.enabled = false;
+            foreach (AudioListener listener in player.GetComponentsInChildren<AudioListener>(true)) listener.enabled = false;
+            if (seat.Costume) player.view.SetCostume(seat.Costume);
+            if (seat.Persistent) Object.DontDestroyOnLoad(player.gameObject);
         }
 
         internal static Seat ScriptLocalInput(Player player)

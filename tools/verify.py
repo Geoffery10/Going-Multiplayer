@@ -4,7 +4,7 @@ Profiles:
   default      offline tooling/scorers only (no game launch, no build)
   --quick      offline + build + loader + one positive gate (day to day)
   --stages ... run only the named stages, in the given order
-  --integration full 16-stage milestone regression
+  --integration full 18-stage milestone regression
 
 Use --focus to choose the quick positive gate. Full suites are for milestones,
 not every edit.
@@ -22,6 +22,7 @@ COMMANDS = {
     "pad-mapping": ["tools/test_pad.py"],
     "damage-ledger": ["tools/test_damage_ledger.py"],
     "input-ledger": ["tools/test_input_ledger.py"],
+    "session-core": ["tools/test_session_core.py"],
     "build": ["tools/build_plugin.py", "--deploy-test"],
     "startup": ["tools/startup_test.py", "--suite"],
     "loader": ["tools/smoke_test.py", "--suite"],
@@ -33,12 +34,14 @@ COMMANDS = {
     "net-ai-movement": ["tools/net_ai_test.py", "--brain", "--suite"],
     "net-damage": ["tools/damage_test.py", "--suite"],
     "net-input": ["tools/input_test.py", "--suite"],
+    "session-loopback": ["tools/session_test.py", "--suite"],
+    "steam-host": ["tools/steam_host_test.py"],
     "controllers": ["tools/controller_test.py", "--suite"],
 }
-OFFLINE = ["tooling", "pad-mapping", "damage-ledger", "input-ledger"]
+OFFLINE = ["tooling", "pad-mapping", "damage-ledger", "input-ledger", "session-core"]
 FULL = OFFLINE + ["build", "startup", "loader", "coexistence", "net-loopback",
                   "actors", "targeting", "net-ai-targeting", "net-ai-movement",
-                  "net-damage", "net-input", "controllers"]
+                  "net-damage", "net-input", "session-loopback", "controllers"]
 POSITIVE = {
     "startup": ["tools/startup_test.py"],
     "loader": ["tools/smoke_test.py"],
@@ -50,6 +53,8 @@ POSITIVE = {
     "net-ai-movement": ["tools/net_ai_test.py", "--brain"],
     "net-damage": ["tools/damage_test.py"],
     "net-input": ["tools/input_test.py"],
+    "session-loopback": ["tools/session_test.py"],
+    "steam-host": ["tools/steam_host_test.py"],
     "controllers": ["tools/controller_test.py"],
 }
 

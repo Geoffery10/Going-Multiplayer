@@ -16,9 +16,11 @@ DEFAULT_PROTON = (
 )
 
 
-def stage_runner(proton):
+def stage_runner(proton, stage_name=None):
     """Keep Proton's runner locks/caches local and its installed runtime read-only."""
-    stage = RUNTIME / "proton9-runner"
+    if stage_name is None:
+        stage_name = "".join(c.lower() if c.isalnum() else "-" for c in proton.name).strip("-")
+    stage = RUNTIME / ("proton-" + stage_name)
     stage.mkdir(parents=True, exist_ok=True)
     for name in ("proton", "filelock.py", "version"):
         source = proton / name
@@ -36,11 +38,13 @@ def stage_runner(proton):
     return stage
 
 
-def command(profile, proton, game_args, windowed=False, install=None):
+def command(profile, proton, game_args, windowed=False, install=None,
+            executable=None, presentation=True, app_id=1154810):
     if not profile or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for c in profile):
         raise ValueError("Invalid profile name")
     proton = proton.resolve()
     install = (install or (ROOT / "local/test-install")).resolve()
+    executable = Path(executable) if executable else (install / "Going Under.exe")
     steam = (Path.home() / ".local/share/Steam").resolve()
     steam_dot = Path.home() / ".steam"
     authority = Path(os.environ.get("XAUTHORITY", "/nonexistent"))
@@ -74,9 +78,9 @@ def command(profile, proton, game_args, windowed=False, install=None):
         "--setenv", "STEAM_COMPAT_CLIENT_INSTALL_PATH", str(steam),
         "--setenv", "STEAM_COMPAT_DATA_PATH", str(runtime / "compatdata"),
         "--setenv", "STEAM_COMPAT_INSTALL_PATH", str(install),
-        "--setenv", "STEAM_COMPAT_APP_ID", "1154810",
-        "--setenv", "SteamAppId", "1154810",
-        "--setenv", "SteamGameId", "1154810",
+        "--setenv", "STEAM_COMPAT_APP_ID", str(app_id),
+        "--setenv", "SteamAppId", str(app_id),
+        "--setenv", "SteamGameId", str(app_id),
         "--setenv", "PROTON_LOG", "1",
         "--setenv", "PROTON_LOG_DIR", str(folder / "logs"),
         "--setenv", "PROTON_USE_WINED3D", "0" if windowed else "1",
@@ -85,10 +89,11 @@ def command(profile, proton, game_args, windowed=False, install=None):
         "--setenv", "WINEDLLOVERRIDES", "winhttp=n,b;mscoree,mshtml=",
         "--chdir", str(install),
         sys.executable, str(ROOT / "tools/proton_entry.py"), str(stage / "proton"),
-        str(install / "Going Under.exe"),
-        *(["-screen-fullscreen", "0", "-screen-width", "1280", "-screen-height", "720"]
-          if windowed else ["-batchmode", "-nographics"]),
-        "-logFile", str(folder / "logs/unity.log"),
+        str(executable),
+        *((["-screen-fullscreen", "0", "-screen-width", "1280", "-screen-height", "720"]
+           if windowed else ["-batchmode", "-nographics"])
+          if presentation else []),
+        *(["-logFile", str(folder / "logs/unity.log")] if presentation else []),
     ] + game_args
     if windowed:
         devices = [Path("/dev/dri"), Path("/dev/input")] + list(Path("/dev").glob("nvidia*")) \

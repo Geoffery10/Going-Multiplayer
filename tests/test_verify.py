@@ -36,43 +36,45 @@ class VerificationRunnerTests(unittest.TestCase):
             return exited.exception.code, summary, run.call_args_list
 
     def test_coexistence_failure_stops_later_game_stages(self):
-        code, summary, calls = self.run_fixture(["--integration"], [0] * 7 + [1])
+        code, summary, calls = self.run_fixture(["--integration"], [0] * 8 + [1])
         self.assertEqual(code, 1)
         self.assertFalse(summary["passed"])
         self.assertEqual(summary["stages"][-1], dict(stage="coexistence", exit_code=1))
-        self.assertEqual(len(calls), 8)
+        self.assertEqual(len(calls), 9)
 
     def test_expanded_serial_order_includes_network_ai(self):
-        code, summary, calls = self.run_fixture(["--integration"], [0] * 16)
+        code, summary, calls = self.run_fixture(["--integration"], [0] * 18)
         self.assertEqual(code, 0)
         self.assertTrue(summary["passed"])
         self.assertEqual(summary["profile"], "full")
         self.assertEqual([stage["stage"] for stage in summary["stages"]],
-                         ["tooling", "pad-mapping", "damage-ledger", "input-ledger", "build", "startup",
-                          "loader", "coexistence", "net-loopback", "actors", "targeting",
-                          "net-ai-targeting", "net-ai-movement", "net-damage", "net-input",
+                         ["tooling", "pad-mapping", "damage-ledger", "input-ledger",
+                          "session-core", "build", "startup", "loader", "coexistence",
+                          "net-loopback", "actors", "targeting", "net-ai-targeting",
+                          "net-ai-movement", "net-damage", "net-input", "session-loopback",
                           "controllers"])
-        self.assertEqual(len(calls), 16)
-        self.assertEqual(calls[5].args[0][1:], ["tools/startup_test.py", "--suite"])
-        self.assertEqual(calls[11].args[0][1:], ["tools/net_ai_test.py", "--suite"])
-        self.assertEqual(calls[12].args[0][1:], ["tools/net_ai_test.py", "--brain", "--suite"])
-        self.assertEqual(calls[13].args[0][1:], ["tools/damage_test.py", "--suite"])
-        self.assertEqual(calls[14].args[0][1:], ["tools/input_test.py", "--suite"])
+        self.assertEqual(len(calls), 18)
+        self.assertEqual(calls[6].args[0][1:], ["tools/startup_test.py", "--suite"])
+        self.assertEqual(calls[12].args[0][1:], ["tools/net_ai_test.py", "--suite"])
+        self.assertEqual(calls[13].args[0][1:], ["tools/net_ai_test.py", "--brain", "--suite"])
+        self.assertEqual(calls[14].args[0][1:], ["tools/damage_test.py", "--suite"])
+        self.assertEqual(calls[15].args[0][1:], ["tools/input_test.py", "--suite"])
+        self.assertEqual(calls[16].args[0][1:], ["tools/session_test.py", "--suite"])
 
     def test_quick_runs_build_loader_and_one_positive_gate(self):
-        code, summary, calls = self.run_fixture(["--quick"], [0] * 7)
+        code, summary, calls = self.run_fixture(["--quick"], [0] * 8)
         self.assertEqual(code, 0)
         self.assertTrue(summary["passed"])
         self.assertEqual(summary["profile"], "quick")
         self.assertFalse(summary["integration"])
         self.assertEqual([stage["stage"] for stage in summary["stages"]],
-                         ["tooling", "pad-mapping", "damage-ledger", "input-ledger", "build",
-                          "loader", "net-input-positive"])
+                         ["tooling", "pad-mapping", "damage-ledger", "input-ledger",
+                          "session-core", "build", "loader", "net-input-positive"])
         self.assertEqual(calls[-1].args[0][1:], ["tools/input_test.py"])
 
     def test_quick_focus_selects_only_its_gate(self):
         code, summary, calls = self.run_fixture(["--quick", "--focus", "net-damage"],
-                                                [0] * 7)
+                                                [0] * 8)
         self.assertEqual(code, 0)
         self.assertEqual(summary["stages"][-1]["stage"], "net-damage-positive")
         self.assertEqual(calls[-1].args[0][1:], ["tools/damage_test.py"])
@@ -93,13 +95,14 @@ class VerificationRunnerTests(unittest.TestCase):
         self.assertTrue(printed.called)
 
     def test_default_does_not_launch_or_build_the_game(self):
-        code, summary, calls = self.run_fixture([], [0, 0, 0, 0])
+        code, summary, calls = self.run_fixture([], [0, 0, 0, 0, 0])
         self.assertEqual(code, 0)
         self.assertFalse(summary["integration"])
         self.assertEqual(summary["profile"], "offline")
         self.assertEqual([stage["stage"] for stage in summary["stages"]],
-                         ["tooling", "pad-mapping", "damage-ledger", "input-ledger"])
-        self.assertEqual(len(calls), 4)
+                         ["tooling", "pad-mapping", "damage-ledger", "input-ledger",
+                          "session-core"])
+        self.assertEqual(len(calls), 5)
 
 
 if __name__ == "__main__":
