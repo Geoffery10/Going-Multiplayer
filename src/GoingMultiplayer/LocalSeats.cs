@@ -23,6 +23,7 @@ namespace GoingMultiplayer
             internal Vector2 Move;
             internal string Palette;
             internal ISeatPad Pad;
+            internal NetworkInputState Network;
         }
 
         internal static readonly Dictionary<Player, Seat> Seats = new Dictionary<Player, Seat>();
@@ -194,6 +195,16 @@ namespace GoingMultiplayer
             if (seat.Persistent) Object.DontDestroyOnLoad(player.gameObject);
         }
 
+        internal static void Forget(Seat seat)
+        {
+            if (seat == null) return;
+            var stale = new List<Player>();
+            foreach (KeyValuePair<Player, Seat> pair in Seats)
+                if (pair.Value == seat) stale.Add(pair.Key);
+            foreach (Player old in stale) Seats.Remove(old);
+            if (seat.Data != null && seat.Data.input != null) Inputs.Remove(seat.Data.input);
+        }
+
         internal static Seat ScriptLocalInput(Player player)
         {
             var seat = new Seat { Player = player, Data = player.data, Scripted = true };
@@ -282,6 +293,15 @@ namespace GoingMultiplayer
         {
             Seat seat;
             if (!Inputs.TryGetValue(__instance, out seat)) return true;
+            if (seat.Network != null)
+            {
+                string name = __originalMethod.Name;
+                __result = name == "GetHorizontalAxis" ? seat.Network.Command.MoveX
+                    : name == "GetVerticalAxis" ? seat.Network.Command.MoveY
+                    : name == "GetCameraHorizontalAxisController" ? seat.Network.Command.CameraX
+                    : 0f;
+                return false;
+            }
             if (seat.Pad != null)
             {
                 __result = seat.Pad.Read().Axis(__originalMethod.Name);
@@ -300,6 +320,11 @@ namespace GoingMultiplayer
             Seat seat;
             if (!Inputs.TryGetValue(__instance, out seat)) return true;
             string name = __originalMethod.Name;
+            if (seat.Network != null)
+            {
+                __result = NetworkBool(seat.Network, name);
+                return false;
+            }
             if (seat.Pad != null)
             {
                 __result = seat.Pad.Read().Button(name);
@@ -322,6 +347,11 @@ namespace GoingMultiplayer
         {
             Seat seat;
             if (!Inputs.TryGetValue(__instance, out seat)) return true;
+            if (seat.Network != null)
+            {
+                __result = seat.Network.Command.Inventory;
+                return false;
+            }
             if (seat.Pad != null)
             {
                 __result = seat.Pad.Read().Inventory();
@@ -335,6 +365,16 @@ namespace GoingMultiplayer
         {
             Seat seat;
             if (!Inputs.TryGetValue(__instance, out seat)) return true;
+            if (seat.Network != null)
+            {
+                string name = __originalMethod.Name;
+                __result = name == "GetMovementAxisController"
+                    ? new Vector2(seat.Network.Command.MoveX, seat.Network.Command.MoveY)
+                    : name == "GetCameraAxisController" || name == "GetCameraAxisMouse"
+                    ? new Vector2(seat.Network.Command.CameraX, seat.Network.Command.CameraY)
+                    : Vector2.zero;
+                return false;
+            }
             if (seat.Pad != null)
             {
                 PadFrame frame = seat.Pad.Read();
@@ -346,6 +386,24 @@ namespace GoingMultiplayer
             }
             __result = Vector2.zero;
             return false;
+        }
+
+        private static bool NetworkBool(NetworkInputState network, string name)
+        {
+            if (name == "IsEnabled") return true;
+            if (name == "AnyActionPressed") return network.AnyActionPressed;
+            if (name == "FocusSwapLeft") return network.Pressed(PlayerButtons.FocusSwapLeft);
+            if (name == "FocusSwapRight") return network.Pressed(PlayerButtons.FocusSwapRight);
+            PlayerButtons button = name.StartsWith("AltAttack") ? PlayerButtons.AltAttack
+                : name.StartsWith("Attack") ? PlayerButtons.Attack
+                : name.StartsWith("Interact") ? PlayerButtons.Interact
+                : name.StartsWith("Dodge") ? PlayerButtons.Dodge
+                : name.StartsWith("Throw") ? PlayerButtons.Throw
+                : name.StartsWith("Focus") ? PlayerButtons.Focus : PlayerButtons.None;
+            if (button == PlayerButtons.None) return false;
+            if (name.EndsWith("Held")) return network.Held(button);
+            if (name.EndsWith("Released")) return network.Released(button);
+            return network.Pressed(button);
         }
 
         private static void InventoryContext(PlayerInventory __instance, out Player __state)

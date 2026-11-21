@@ -22,6 +22,8 @@ def main():
                "-nologo", "-nostdlib+", "-target:exe", "-out:" + str(assembly)]
     command += ["-reference:" + str(path) for path in refs[0].glob("*.dll")]
     command += [str(ROOT / "src/GoingMultiplayer/SessionProtocol.cs"),
+                str(ROOT / "src/GoingMultiplayer/PadFrame.cs"),
+                str(ROOT / "src/GoingMultiplayer/NetworkInputState.cs"),
                 str(ROOT / "tests/SessionCoreTests.cs")]
     subprocess.run(command, env=env, check=True)
     assembly.with_suffix(".runtimeconfig.json").write_text(json.dumps({

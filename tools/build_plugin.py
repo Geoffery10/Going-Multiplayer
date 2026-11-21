@@ -27,7 +27,8 @@ def main():
             "UnityEngine.PhysicsModule.dll", "UnityEngine.AnimationModule.dll",
             "UnityEngine.VideoModule.dll",
             "Rewired_Core.dll",
-            "UnityEngine.ScreenCaptureModule.dll",
+            "UnityEngine.ScreenCaptureModule.dll", "UnityEngine.UI.dll",
+            "Unity.TextMeshPro.dll",
             "Assembly-CSharp-firstpass.dll",
             "Facepunch.Steamworks.Win64.dll",
         )

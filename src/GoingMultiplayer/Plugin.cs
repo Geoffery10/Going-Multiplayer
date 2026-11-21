@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.12.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.13.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -27,6 +27,8 @@ namespace GoingMultiplayer
         private bool netInputProbe;
         private bool sessionProbe;
         private bool steamProbe;
+        private bool saveProbe;
+        private bool coopMenuProbe;
         private string steamRole = "host";
         private ulong steamLobby;
         private ulong steamInvite;
@@ -39,10 +41,12 @@ namespace GoingMultiplayer
         private string netRole = "host";
         private int netPort;
         private bool localPrototype;
+        private SteamCoop coop;
+        private bool showCoop;
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.12.0 networking=loopback_test_only");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.13.0 networking=loopback_test_only");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             startupProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-startup-probe") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
@@ -54,6 +58,8 @@ namespace GoingMultiplayer
             netInputProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-input-probe") >= 0;
             sessionProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-session-probe") >= 0;
             steamProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-steam-probe") >= 0;
+            saveProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-save-probe") >= 0;
+            coopMenuProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-coop-menu-probe") >= 0;
             steamHostOnly = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-steam-host-only") >= 0;
             netAiProbe |= netBrainProbe;
             netNegative = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-net-negative") >= 0;
@@ -99,10 +105,14 @@ namespace GoingMultiplayer
                 hooksFound = false;
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (smokeMode || seatProbe || targetProbe || netProbe || netAiProbe || netDamageProbe
-                || netInputProbe || sessionProbe || steamProbe)
+                || netInputProbe || sessionProbe || steamProbe || saveProbe || coopMenuProbe)
                 TestStartup.Install(this,
                     Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-normal-startup") < 0);
             if (localPrototype) LocalSeats.Install();
+            if (!smokeMode && !seatProbe && !targetProbe && !netProbe && !netAiProbe
+                && !netDamageProbe && !netInputProbe && !sessionProbe && !steamProbe
+                && !saveProbe)
+                coop = new SteamCoop(this);
         }
 
         private IEnumerator Start()
@@ -126,6 +136,53 @@ namespace GoingMultiplayer
             if (sessionProbe)
             {
                 yield return StartCoroutine(RunSessionProbe());
+                yield break;
+            }
+            if (coopMenuProbe)
+            {
+                yield return NetProbe.LoadOffice(this);
+                if (GameManager.instance != null)
+                {
+                    GameManager.instance.isPaused = false;
+                    Time.timeScale = 1f;
+                }
+                float settle = Time.realtimeSinceStartup + 120f;
+                while (Time.realtimeSinceStartup < settle)
+                {
+                    bool busy = GUIManager.instance != null
+                        && GUIManager.instance.IsLoading();
+                    if (!busy && UnityEngine.Object.FindObjectOfType<LoadingScreen>() == null
+                        && !CutsceneManager.sceneRunning)
+                        break;
+                    yield return null;
+                }
+                Report("GMP_COOP_SETTLE loading="
+                    + (GUIManager.instance != null && GUIManager.instance.IsLoading())
+                    + " loader=" + (UnityEngine.Object.FindObjectOfType<LoadingScreen>() != null)
+                    + " cutscene=" + CutsceneManager.sceneRunning
+                    + " paused=" + (GameManager.instance != null && GameManager.instance.isPaused)
+                    + " scale=" + Time.timeScale);
+                yield return new WaitForSecondsRealtime(3f);
+                if (coop != null)
+                {
+                    coop.Host();
+                    float lobbyDeadline = Time.realtimeSinceStartup + 20f;
+                    while (!coop.HasLobby && Time.realtimeSinceStartup < lobbyDeadline)
+                        yield return null;
+                    yield return new WaitForSecondsRealtime(1.5f);
+                    coop.MenuProbeReady = true;
+                }
+                float timeout = Time.realtimeSinceStartup + 40f;
+                while (coop != null && !coop.MenuCaptured
+                    && Time.realtimeSinceStartup < timeout)
+                    yield return null;
+                yield return new WaitForSecondsRealtime(1f);
+                Application.Quit(0);
+                yield break;
+            }
+            if (saveProbe)
+            {
+                yield return StartCoroutine(SaveProbe.Run(this, runId));
                 yield break;
             }
             if (steamProbe)
@@ -333,6 +390,7 @@ namespace GoingMultiplayer
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             sceneCount++;
+            if (coop != null) coop.OnSceneLoaded();
             Report("GMP_SCENE_LOADED name=" + scene.name + " count=" + sceneCount);
             if (localPrototype)
             {
@@ -343,6 +401,12 @@ namespace GoingMultiplayer
 
         private void Update()
         {
+            if (coop != null)
+            {
+                coop.Tick();
+                if (Input.GetKeyDown(KeyCode.F7)) { coop.Toggle(); showCoop = coop.Visible; }
+                if (showCoop != coop.Visible) showCoop = coop.Visible;
+            }
             if (Input.GetKeyDown(KeyCode.F8)) showStatus = !showStatus;
             if (localPrototype && Input.GetKeyDown(KeyCode.F10)) ControllerSeats.Cycle();
             if (localPrototype && Input.GetKeyDown(KeyCode.F9) && Player.singlePlayer && LocalSeats.Count == 0)
@@ -356,12 +420,13 @@ namespace GoingMultiplayer
         {
             Logger.LogInfo(text);
             if (seatProbe || smokeMode || targetProbe || netProbe || netAiProbe || netDamageProbe
-                || netInputProbe || sessionProbe || steamProbe)
+                || netInputProbe || sessionProbe || steamProbe || saveProbe || coopMenuProbe)
                 File.AppendAllText(Path.Combine(BepInEx.Paths.GameRootPath, "gmp-trace-" + runId + ".log"),
                     text + Environment.NewLine);
         }
         private void OnGUI()
         {
+            if (showCoop && coop != null) coop.DrawGui();
             if (!showStatus) return;
             GUI.Box(new Rect(20, 20, 600, 205), "Going Multiplayer — experimental local prototype");
             GUI.Label(new Rect(35, 50, 410, 25), "Online co-op is NOT implemented in this build.");
@@ -376,6 +441,7 @@ namespace GoingMultiplayer
         {
             if (seatProbe) Report("GMP_PLUGIN_DESTROYED run=" + runId);
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            if (coop != null) coop.Shutdown();
             LocalSeats.Clear();
         }
     }

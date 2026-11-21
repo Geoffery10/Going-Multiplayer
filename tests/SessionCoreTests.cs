@@ -79,15 +79,42 @@ internal static class SessionCoreTests
         Check(decoded.X == snapshot.X && decoded.Z == snapshot.Z && decoded.Health == snapshot.Health
             && decoded.Animation == snapshot.Animation, "snapshot fields");
 
-        var command = new InputCommand { MoveX = 1f, MoveY = -1f, Yaw = 90f, Buttons = 3 };
+        var command = new InputCommand
+        {
+            MoveX = 1f, MoveY = -1f, Yaw = 90f, CameraX = 0.5f, CameraY = -0.5f,
+            Held = PlayerButtons.Attack | PlayerButtons.Dodge,
+            Pressed = PlayerButtons.Attack,
+            Released = PlayerButtons.Dodge,
+            Inventory = 1,
+        };
         byte[] commandBytes = SessionCodec.Command(1, 42, 2, 4, command);
         InputCommand decodedCommand;
         Check(SessionCodec.TryCommand(commandBytes, out decodedCommand), "command decode");
         Check(decodedCommand.MoveX == 1f && decodedCommand.MoveY == -1f
-            && decodedCommand.Buttons == 3, "command fields");
+            && decodedCommand.CameraX == 0.5f && decodedCommand.CameraY == -0.5f
+            && decodedCommand.Held == command.Held && decodedCommand.Pressed == command.Pressed
+            && decodedCommand.Released == command.Released
+            && decodedCommand.Inventory == 1, "command fields");
 
         byte[] truncated = new byte[SessionCodec.HeaderSize - 1];
         Check(!SessionCodec.TryHeader(truncated, out type, out protocol, out epoch, out player, out sequence), "truncated header");
+
+        var network = new NetworkInputState();
+        network.Apply(new InputCommand
+        {
+            MoveX = 2f, MoveY = -2f, CameraX = 3f, CameraY = -3f,
+            Held = PlayerButtons.Attack | PlayerButtons.Focus,
+            Pressed = PlayerButtons.Dodge,
+            Released = PlayerButtons.Interact,
+            Inventory = -1,
+        }, 5);
+        Check(Math.Abs(network.Command.MoveX - 1f) < 0.001f, "network input clamps move");
+        Check(Math.Abs(network.Command.CameraY + 1f) < 0.001f, "network input clamps camera");
+        Check(network.Held(PlayerButtons.Attack) && network.Held(PlayerButtons.Focus), "network held");
+        Check(network.Pressed(PlayerButtons.Dodge) && network.Released(PlayerButtons.Interact), "network edges");
+        Check(network.AnyActionPressed, "network any action");
+        network.Apply(new InputCommand { MoveX = -1f }, 4);
+        Check(network.Command.MoveX == 1f, "network ignores older sequence");
     }
 
     private static void HandshakeAndState()
@@ -140,6 +167,13 @@ internal static class SessionCoreTests
         Pump(host, guest, ref now);
         Check(receivedByHost.Count == before, "duplicate and wrong-player rejected");
         Check(guest.Stale >= 1 && guest.Rejected >= 1, "stale and rejected counters");
+
+        bool kicked = false;
+        guest.Kicked += delegate(Peer peer) { kicked = true; };
+        host.KickPeer(hostPeer);
+        Pump(host, guest, ref now);
+        Check(kicked && guest.State == SessionState.Ending, "guest kicked");
+        Check(host.Peers.Count == 0, "host removed kicked peer");
 
         // Expire the guest and verify the host removes it.
         now += 3.0;

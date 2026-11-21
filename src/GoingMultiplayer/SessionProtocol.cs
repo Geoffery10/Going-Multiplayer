@@ -20,6 +20,7 @@ namespace GoingMultiplayer
         Bye = 7,
         Done = 8,
         Ready = 9,
+        Kick = 10,
     }
 
     internal struct PlayerSnapshot
@@ -33,12 +34,33 @@ namespace GoingMultiplayer
         internal byte Flags;
     }
 
+    [Flags]
+    internal enum PlayerButtons
+    {
+        None = 0,
+        Attack = 1,
+        AltAttack = 2,
+        Dodge = 4,
+        Interact = 8,
+        Throw = 16,
+        Focus = 32,
+        FocusSwapLeft = 64,
+        FocusSwapRight = 128,
+        PreviousItem = 256,
+        NextItem = 512,
+    }
+
     internal struct InputCommand
     {
         internal float MoveX;
         internal float MoveY;
         internal float Yaw;
-        internal byte Buttons;
+        internal float CameraX;
+        internal float CameraY;
+        internal PlayerButtons Held;
+        internal PlayerButtons Pressed;
+        internal PlayerButtons Released;
+        internal int Inventory;
     }
 
     internal sealed class SessionConfig
@@ -220,7 +242,12 @@ namespace GoingMultiplayer
                     writer.Write(command.MoveX);
                     writer.Write(command.MoveY);
                     writer.Write(command.Yaw);
-                    writer.Write(command.Buttons);
+                    writer.Write(command.CameraX);
+                    writer.Write(command.CameraY);
+                    writer.Write((int)command.Held);
+                    writer.Write((int)command.Pressed);
+                    writer.Write((int)command.Released);
+                    writer.Write(command.Inventory);
                 });
         }
 
@@ -334,7 +361,12 @@ namespace GoingMultiplayer
                     command.MoveX = reader.ReadSingle();
                     command.MoveY = reader.ReadSingle();
                     command.Yaw = reader.ReadSingle();
-                    command.Buttons = reader.ReadByte();
+                    command.CameraX = reader.ReadSingle();
+                    command.CameraY = reader.ReadSingle();
+                    command.Held = (PlayerButtons)reader.ReadInt32();
+                    command.Pressed = (PlayerButtons)reader.ReadInt32();
+                    command.Released = (PlayerButtons)reader.ReadInt32();
+                    command.Inventory = reader.ReadInt32();
                     return true;
                 }
             }
@@ -546,6 +578,7 @@ namespace GoingMultiplayer
         internal Action<Peer, PlayerSnapshot> SnapshotReceived = delegate { };
         internal Action<Peer, InputCommand> CommandReceived = delegate { };
         internal Action<SessionState> StateChanged = delegate { };
+        internal Action<Peer> Kicked = delegate { };
 
         internal void StartHost(int port, double now)
         {
@@ -634,6 +667,14 @@ namespace GoingMultiplayer
                 if (peer.Connected) SendControl(MessageType.Ready, peer, now);
         }
 
+        internal void KickPeer(Peer peer)
+        {
+            if (peer == null) return;
+            SendControl(MessageType.Kick, peer, 0);
+            Peers.Remove(peer);
+            PeerLeft(peer);
+        }
+
         internal void SendDone(double now)
         {
             foreach (Peer peer in Peers.All)
@@ -677,6 +718,17 @@ namespace GoingMultiplayer
             if (type == MessageType.Welcome)
             {
                 HandleWelcome(packet, now);
+                return;
+            }
+            if (type == MessageType.Kick)
+            {
+                Peer kicked;
+                if (Peers.TryByKey(packet.Peer, out kicked))
+                {
+                    LastError = "kicked";
+                    Kicked(kicked);
+                    SetState(SessionState.Ending);
+                }
                 return;
             }
             if (type == MessageType.Bye)

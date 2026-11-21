@@ -23,8 +23,9 @@ RESULT = re.compile(
     r"epoch=(\d+) local_id=(\d+) remote_id=(\d+) peers=(\d+) sent=(\d+) "
     r"received=(\d+) rejected=(\d+) stale=(\d+) remote_delta=([-\d.]+) "
     r"dungeon_delta=([-\d.]+) actor_alive=(True|False) "
-    r"health_kept=(True|False) ready_barrier=(True|False) "
-    r"done_barrier=(True|False) negative=(True|False) scene=(\S+)")
+    r"health_kept=(True|False) view_ok=(True|False) "
+    r"ready_barrier=(True|False) done_barrier=(True|False) "
+    r"negative=(True|False) scene=(\S+)")
 
 
 def parse(text, run_id):
@@ -33,7 +34,7 @@ def parse(text, run_id):
         return None
     (status, run, role, session, epoch, local_id, remote_id, peers, sent,
      received, rejected, stale, remote_delta, dungeon_delta, actor_alive,
-     health_kept, ready_barrier, done_barrier, negative, scene) = matches[0]
+     health_kept, view_ok, ready_barrier, done_barrier, negative, scene) = matches[0]
     if run != run_id:
         return None
     return {
@@ -44,6 +45,7 @@ def parse(text, run_id):
         "remote_delta": float(remote_delta), "dungeon_delta": float(dungeon_delta),
         "actor_alive": actor_alive == "True",
         "health_kept": health_kept == "True",
+        "view_ok": view_ok == "True",
         "ready_barrier": ready_barrier == "True",
         "done_barrier": done_barrier == "True",
         "negative": negative == "True", "scene": scene,
@@ -75,6 +77,7 @@ def score_pair(host_text, guest_text, run_id, host_result, guest_result, negativ
                and host["received"] >= 10 and guest["received"] >= 10
                and host["actor_alive"] and guest["actor_alive"]
                and host["health_kept"] and guest["health_kept"]
+               and host["view_ok"] and guest["view_ok"]
                and host["ready_barrier"] and guest["ready_barrier"]
                and host["done_barrier"] and guest["done_barrier"]
                and host["scene"] != "none" and guest["scene"] != "none")

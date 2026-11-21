@@ -47,6 +47,12 @@ namespace GoingMultiplayer
                         + " n=" + received + " x=" + Fmt(snapshot.X)
                         + " z=" + Fmt(snapshot.Z));
             };
+            session.CommandReceived += delegate(Peer peer, InputCommand command)
+            {
+                NetworkActor target = ActorRegistry.Get(peer.PlayerId);
+                if (target != null && target.Seat != null && target.Seat.Network != null)
+                    target.Seat.Network.Apply(command, peer.LastSequence);
+            };
 
             plugin.Report("GMP_SESSION_STAGE role=" + role + " port=" + port
                 + " mode=" + mode + " stage=start");
@@ -89,6 +95,15 @@ namespace GoingMultiplayer
             int remoteId = isHost ? 2 : 1;
             Vector3 remoteSpawn = FindSpawn(local);
             NetworkActor remote = ActorRegistry.AddRemote(local, remoteId, remoteSpawn);
+            bool localCamera = Camera.main != null && Camera.main.isActiveAndEnabled;
+            bool remoteCamera = false;
+            foreach (Camera camera in remote.Seat.Player.GetComponentsInChildren<Camera>(true))
+                if (camera.isActiveAndEnabled) remoteCamera = true;
+            bool hudLocal = GUIManager.instance != null && Player.singlePlayer == local;
+            bool viewOk = localCamera && !remoteCamera && hudLocal;
+            plugin.Report("GMP_SESSION_VIEW role=" + role + " local_camera=" + localCamera
+                + " remote_camera=" + remoteCamera + " hud_local=" + hudLocal
+                + " view_ok=" + viewOk);
             plugin.Report("GMP_SESSION_REMOTE_START role=" + role + " remote_id=" + remoteId
                 + " remote=" + Fmt(remote.Seat.Player.transform.position.x) + ","
                 + Fmt(remote.Seat.Player.transform.position.z)
@@ -221,6 +236,7 @@ namespace GoingMultiplayer
             bool doneBarrier = session.AllPeersDone;
 
             bool pass = session.State == SessionState.Playing
+                && viewOk
                 && readyBarrier
                 && doneBarrier
                 && !string.IsNullOrEmpty(session.SessionId)
@@ -247,6 +263,7 @@ namespace GoingMultiplayer
                 + " dungeon_delta=" + Fmt(dungeonDelta)
                 + " actor_alive=" + actorAlive
                 + " health_kept=" + healthKept
+                + " view_ok=" + viewOk
                 + " ready_barrier=" + readyBarrier + " done_barrier=" + doneBarrier
                 + " negative=" + negative
                 + " scene=" + (DungeonEntry.SelectedScene ?? "none")
@@ -266,7 +283,7 @@ namespace GoingMultiplayer
                 + " sent=" + session.SnapshotsSent + " received=" + received
                 + " rejected=" + session.Rejected + " stale=" + session.Stale
                 + " remote_delta=0 dungeon_delta=0 actor_alive=False health_kept=False"
-                + " ready_barrier=False done_barrier=False"
+                + " view_ok=False ready_barrier=False done_barrier=False"
                 + " negative=" + (Array.IndexOf(Environment.GetCommandLineArgs(),
                     "-gmp-session-negative") >= 0)
                 + " scene=none mode=" + mode + " reason=" + reason);

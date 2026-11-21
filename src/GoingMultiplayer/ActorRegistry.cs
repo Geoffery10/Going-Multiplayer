@@ -32,17 +32,7 @@ namespace GoingMultiplayer
 
         internal static void Reset()
         {
-            foreach (NetworkActor actor in actors.Values)
-            {
-                if (actor.Seat != null && actor.Seat.Player)
-                    UnityEngine.Object.Destroy(actor.Seat.Player.gameObject);
-                if (actor.Seat != null && actor.Seat.Data)
-                    UnityEngine.Object.Destroy(actor.Seat.Data.gameObject);
-                if (actor.Seat != null && actor.Seat.Material)
-                    UnityEngine.Object.Destroy(actor.Seat.Material);
-                if (actor.Seat != null && actor.Seat.Costume)
-                    UnityEngine.Object.Destroy(actor.Seat.Costume);
-            }
+            LocalSeats.Clear();
             actors.Clear();
         }
 
@@ -51,6 +41,7 @@ namespace GoingMultiplayer
             if (playerId <= 0) throw new ArgumentOutOfRangeException("playerId");
             if (actors.ContainsKey(playerId)) throw new InvalidOperationException("Duplicate actor id");
             LocalSeats.Seat seat = LocalSeats.Spawn(local, position, true, true);
+            seat.Network = new NetworkInputState();
             var actor = new NetworkActor
             {
                 PlayerId = playerId,
@@ -75,6 +66,7 @@ namespace GoingMultiplayer
         {
             NetworkActor actor;
             if (!actors.TryGetValue(playerId, out actor)) return;
+            LocalSeats.Forget(actor.Seat);
             if (actor.Seat != null && actor.Seat.Player)
                 UnityEngine.Object.Destroy(actor.Seat.Player.gameObject);
             if (actor.Seat != null && actor.Seat.Data)

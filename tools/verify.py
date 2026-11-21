@@ -36,6 +36,7 @@ COMMANDS = {
     "net-input": ["tools/input_test.py", "--suite"],
     "session-loopback": ["tools/session_test.py", "--suite"],
     "steam-host": ["tools/steam_host_test.py"],
+    "coop-host": ["tools/coop_host_test.py"],
     "controllers": ["tools/controller_test.py", "--suite"],
 }
 OFFLINE = ["tooling", "pad-mapping", "damage-ledger", "input-ledger", "session-core"]
@@ -55,6 +56,7 @@ POSITIVE = {
     "net-input": ["tools/input_test.py"],
     "session-loopback": ["tools/session_test.py"],
     "steam-host": ["tools/steam_host_test.py"],
+    "coop-host": ["tools/coop_host_test.py"],
     "controllers": ["tools/controller_test.py"],
 }
 
