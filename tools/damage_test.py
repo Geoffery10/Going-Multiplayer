@@ -67,6 +67,10 @@ def score(host_text, guest_text, run_id, build, host_process, guest_process, neg
     if host["session"] == "none" or host["session"] != guest["session"] or any(
             host[key] != guest[key] for key in ("geometry", "scene", "floor")):
         return False
+    for text, role in ((host_text, "host"), (guest_text, "guest")):
+        intros = [line for line in text.splitlines() if line.startswith("GMP_DAMAGE_INTRO")]
+        if intros != [f"GMP_DAMAGE_INTRO role={role} dialogue=False background=True"]:
+            return False
     if not all(actor[key] for actor in (host, guest) for key in ("connected", "ready", "ack")):
         return False
     if any(host[key] for key in ("target_negative", "duplicate_negative")):

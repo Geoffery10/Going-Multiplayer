@@ -21,7 +21,7 @@ def trace(role, negative=None):
                 p1=f"{p1:.3f}", p2=f"{p2:.3f}", mirror_quiet=True,
                 blocks=0 if host else 4, starts=0,
                 target_negative=negative == "target", duplicate_negative=negative == "duplicate")
-    lines = []
+    lines = [f"GMP_DAMAGE_INTRO role={role} dialogue=False background=True"]
     for index in range(applied):
         route = 1 if negative == "target" else 2
         a, b = (9, 10) if route == 1 else (10, 9 - index)
@@ -44,6 +44,13 @@ class DamageScorerTests(unittest.TestCase):
 
     def test_positive(self):
         self.assertTrue(self.score())
+
+    def test_both_clients_clear_dialogue_and_run_in_background(self):
+        for key in ("dialogue=False", "background=True"):
+            changed = "dialogue=True" if key == "dialogue=False" else "background=False"
+            self.assertFalse(self.score(host=self.host.replace(key, changed)))
+            self.assertFalse(self.score(guest=self.guest.replace(key, changed)))
+        self.assertFalse(self.score(guest=self.guest + "\nGMP_DAMAGE_INTRO corrupt"))
 
     def test_native_pulse_hit_source_and_target_required(self):
         for old, new in (("pulses=1", "pulses=0"), ("hits=1", "hits=2"),

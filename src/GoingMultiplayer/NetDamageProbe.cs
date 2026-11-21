@@ -8,10 +8,9 @@ using UnityEngine;
 
 namespace GoingMultiplayer
 {
-    // O4c (IN PROGRESS, NOT PASSING): one authored attack, native damage on the
-    // host, and exactly-once health-delta application on the guest. The host-side
-    // attack fixture does not yet produce a verified hit; see docs/O4C-COMBAT.md.
-    // Not wired into verify.py.
+    // O4c QA: one authored electric-node coroutine/physics attack on the host
+    // and exactly-once health-delta application on the guest. The stationary
+    // fixture holds its animator; this is not an animated combat-system gate.
     internal static class NetDamageProbe
     {
         private static Enemy enemy;
@@ -40,7 +39,7 @@ namespace GoingMultiplayer
         private static bool BeforeDamage(Player __instance, out float __state)
         {
             __state = __instance.health;
-            // In this fixture the guest may only apply authenticated host
+            // In this fixture the guest may only apply session-tagged loopback
             // deltas, never damage from its independently running world.
             return host || (__instance != p1 && __instance != p2);
         }
@@ -134,9 +133,7 @@ namespace GoingMultiplayer
             plugin.Report("GMP_DAMAGE_ROOM name=" + room.name + " dialogue_active="
                 + PixelCrushers.DialogueSystem.DialogueManager.instance.isConversationActive);
             string geometry = RoomFixture.Fingerprint(room);
-            GameObject prefab = FindBladeBot(room);
-            if (!prefab || !prefab.GetComponentInChildren<Hitbox>(true))
-                throw new InvalidOperationException("Expected an authored hitbox enemy fixture");
+            GameObject prefab = FindElectricBot(room);
             // Keep P1 at its own spawn point so a proximity conversation is not
             // triggered by a teleport. The bot swings next to the remote actor.
             Vector3 pos1 = local.transform.position;
@@ -147,14 +144,22 @@ namespace GoingMultiplayer
             if (!room.PointWithinBoundaries(pos2, 0.5f) || !room.PointWithinBoundaries(enemyPos, 0.5f))
             {
                 axis = -axis;
-                pos2 = pos1 - axis * 6f;
-                enemyPos = pos2 - axis * 0.6f;
+                pos2 = pos1 + axis * 6f;
+                enemyPos = pos2 + axis * 0.6f;
             }
             if (!room.PointWithinBoundaries(pos2, 0.5f) || !room.PointWithinBoundaries(enemyPos, 0.5f)
                 || Util.ZeroY(pos1 - pos2).magnitude < 4f)
                 throw new InvalidOperationException("Attack fixture cannot separate P1 from the bot");
             SetPosition(p1, pos1);
             SetPosition(p2, pos2);
+            // Both private clients enter the scripted intro independently.
+            // Do not leave the guest frozen behind a dialogue UI.
+            yield return new WaitForSeconds(2f);
+            DismissIntro();
+            yield return null;
+            plugin.Report("GMP_DAMAGE_INTRO role=" + role
+                + " dialogue=" + PixelCrushers.DialogueSystem.DialogueManager.instance.isConversationActive
+                + " background=" + Application.runInBackground);
             string scene = DungeonEntry.SelectedScene;
             int floor = DungeonManager.instance.currentFloor;
             string session = host ? Guid.NewGuid().ToString("N") : null;
@@ -292,12 +297,17 @@ namespace GoingMultiplayer
                         armedAt = now;
                         enemy = room.NewEnemy(prefab, enemyPos, -1f);
                         if (!enemy) throw new InvalidOperationException("Attack enemy spawn rejected");
-                        var node = enemy.GetComponentInChildren<CubicleGroundBotBladeNode>(true);
-                        var attackBox = enemy.GetComponentInChildren<Hitbox>(true);
-                        if (!node || !attackBox)
-                            throw new InvalidOperationException("Blade node or hitbox missing on fixture");
+                        var bot = enemy as CubicleGroundBot;
+                        var node = bot.myNode.GetComponent<CubicleGroundBotElectricNode>();
+                        if (!node || !node.view || !node.glow || !node.electricExplosion)
+                            throw new InvalidOperationException("Authored electric node references missing");
+                        // Disable every sibling before activating the shared container.
+                        // Only myNode is authored for this prefab variant.
+                        foreach (var sibling in enemy.GetComponentsInChildren<MonoBehaviour>(true))
+                            if (sibling is iCubicleNode) sibling.gameObject.SetActive(false);
+                        foreach (var box in enemy.GetComponentsInChildren<Hitbox>(true))
+                            box.enabled = false;
                         node.gameObject.SetActive(false);
-                        attackBox.enabled = false;
                         enemy.rb.constraints = RigidbodyConstraints.FreezeAll;
                         enemy.rb.isKinematic = false;
                         DungeonManager.currentRoom = room;
@@ -308,25 +318,25 @@ namespace GoingMultiplayer
                             yield return null;
                         if (!enemy.Active || !enemy.thonking)
                             throw new InvalidOperationException("Native enemy brain did not start");
+                        // Let initial spawn animation advance before holding it.
+                        yield return new WaitForSeconds(1f);
+                        // The animator owns the Nodes active track. This is a
+                        // stationary coroutine/physics attack fixture, not an
+                        // animation gate: hold that track before arming one node.
+                        enemy.view.anim.enabled = false;
                         selectedTarget = (Entity)Aggro.GetValue(enemy) == p2 ? 2 : 1;
-                        // Re-enable one authored attack node once to obtain a
+                        // Enable one authored attack node once to obtain a
                         // reproducible pulse. Its own routine creates the
                         // explosion; physics must find the player and damage it.
                         // The node's authored parent container starts inactive,
                         // so activate its ancestors up to (not including) the
                         // enemy root before enabling the node itself.
-                        Transform chain = node.transform;
+                        Transform chain = node.transform.parent;
                         while (chain && chain.gameObject != enemy.gameObject)
                         {
                             chain.gameObject.SetActive(true);
                             chain = chain.parent;
                         }
-                        // This variant's serialized node reference can be
-                        // unassigned; bind it to the enemy's own view before the
-                        // authored routine starts. This wires a reference, it
-                        // does not create damage or a hit.
-                        node.view = enemy.view;
-                        attackBox.enabled = true;
                         node.gameObject.SetActive(true);
                         string chainNames = "";
                         Transform walk = node.transform;
@@ -340,18 +350,15 @@ namespace GoingMultiplayer
                     }
                     if (host && armed && hits == 0)
                     {
-                        // A trigger needs a moving body. Kinematic MovePosition on
-                        // P1 supplies it without injecting hits or damage.
-                        // Move the attacker's own body so its blade hitbox
-                        // sweeps P2's collider. Kinematic motion is required for
-                        // trigger events between two otherwise static bodies.
-                        float wave = Mathf.Sin((now - armedAt) * 6f) * 0.35f;
-                        enemy.rb.MovePosition(enemyPos - axis * (0.35f + wave));
+                        // The authored electric pulse enables its own sphere
+                        // trigger; no scripted sweep or synthetic hit is needed.
                         if (now - armedAt > 2f && Mathf.Repeat(now - armedAt, 2f) < 0.3f && !attackTimedOut)
                         {
                             var live = enemy ? enemy.GetComponentInChildren<CubicleGroundBotElectricNode>(true) : null;
                             plugin.Report("GMP_DAMAGE_PROBE pulses=" + pulses + " explosions=" + explosionsSeen
                                 + " node=" + (live ? live.isActiveAndEnabled.ToString() : "missing")
+                                + " authored=" + ((CubicleGroundBot)enemy).myNode.activeInHierarchy
+                                + " parent=" + ((CubicleGroundBot)enemy).myNode.transform.parent.gameObject.activeSelf
                                 + " thonking=" + (enemy && enemy.thonking)
                                 + " room=" + (DungeonManager.currentRoom ? DungeonManager.currentRoom.name : "null"));
                         }
@@ -430,7 +437,7 @@ namespace GoingMultiplayer
             return target == first ? 1 : target == second ? 2 : 0;
         }
 
-        private static GameObject FindBladeBot(Room room)
+        private static GameObject FindElectricBot(Room room)
         {
             DungeonSettings settings = DungeonManager.CURRENT_SETTINGS;
             if (!settings) throw new InvalidOperationException("No dungeon settings for enemy fixture");
@@ -440,18 +447,27 @@ namespace GoingMultiplayer
                 if (data == null) continue;
                 GameObject candidate = data.GetPrefab(room);
                 if (!candidate) continue;
-                Enemy enemy = candidate.GetComponent<Enemy>();
-                if (!enemy || enemy.passive) continue;
-                if (candidate.GetComponentInChildren<CubicleGroundBotBladeNode>(true)
-                    && candidate.GetComponentInChildren<Hitbox>(true)) return candidate;
+                var bot = candidate.GetComponent<CubicleGroundBot>();
+                if (!bot || bot.passive || !bot.myNode) continue;
+                var node = bot.myNode.GetComponent<CubicleGroundBotElectricNode>();
+                if (node && node.view && node.glow && node.electricExplosion
+                    && node.pulseRadius > 0.6f && node.pulseRadius < 5f) return candidate;
             }
-            throw new InvalidOperationException("No authored hitbox enemy prefab available");
+            throw new InvalidOperationException("No authored electric enemy prefab available");
         }
 
         private static void SetPosition(Player player, Vector3 position)
         {
             player.transform.position = position;
             player.rb.position = position;
+        }
+
+        private static void DismissIntro()
+        {
+            PixelCrushers.DialogueSystem.DialogueManager.instance.StopConversation();
+            p1.CutsceneEnded();
+            p2.CutsceneEnded();
+            CameraController.instance.StopCutscene(snap: true);
         }
 
         private static string Fmt(float value) { return value.ToString("F3", CultureInfo.InvariantCulture); }

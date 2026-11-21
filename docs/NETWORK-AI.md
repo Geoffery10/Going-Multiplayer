@@ -163,7 +163,20 @@ It does not bypass dungeon generation, Steam initialization or gameplay setup.
 
 These remain required before full O4 or playable online co-op can be claimed.
 
-## Next slice: native attack/damage attribution
+## Subsequent O4c slice: native electric attack/damage attribution
+
+The scoped [O4c combat gate](O4C-COMBAT.md) now passes: one native electric
+explosion hits remote P2 on the host and the guest applies its health delta
+exactly once. Wrong-target and duplicate-application controls passed, followed
+by the full 14-stage v0.9.0 regression. The stationary fixture holds its animator;
+animated combat, general damage effects and full O4 remain unproven.
+
+The subsequent [O2 movement-authority gate](O2-INPUT.md) passed its positive and
+four expected-failure twins: guest movement intent is simulated by the native
+player path on the host and returned as snapshots. It covers movement only;
+remaining actions, prediction and per-client camera mapping are open.
+
+The original requirements and broader cautions remain relevant:
 
 Require a native host attack to produce a traceable hit on the selected remote
 player, apply health changes only under host authority, and replicate the

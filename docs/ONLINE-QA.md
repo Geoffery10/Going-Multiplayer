@@ -138,9 +138,30 @@ before and after.
    collision-fixture metadata and sequenced movement samples for one authored
    CubicleGroundBot. Omitted poses and enabled guest AI each fail as intended.
    All 11 serial regression stages passed on v0.8.0, with no physical controllers.
-   Native attack/damage attribution and replication are next; full O4 is not complete.
+   Full O4 is not complete.
    Full O2 input authority remains incomplete: rejecting host-id claims is not
    host simulation of guest input. Complete online O4 and O2, then O5–O9.
+6. **O4c electric attack/health slice — implemented and passed.**
+   `tools/damage_test.py --suite` observes one native host pulse hitting remote
+   P2 and exactly-once guest health replication despite duplicate delivery.
+   Wrong-target and duplicate-application mutations each produce their specific
+   expected failure. Both clients clear entrance dialogue and run unfocused.
+   This stationary fixture holds the animator: it does not prove animated or
+   general combat. See [scope and controls](O4C-COMBAT.md).
+   All 14 serial regression stages passed on v0.9.0 (64 Python tests, 27 input
+   checks, 16 ledger checks), including the earlier suites. Broader O4 combat
+   and later online gates remain incomplete.
+7. **O2 movement authority — implemented and passing its five-gate suite.**
+   `tools/input_test.py --suite` sends guest movement intent to the host,
+   validates session/epoch/player/sequence/axes, feeds the native player path on
+   the host and returns authoritative snapshots. Dropped input, accepted stale
+   input, never-cleared input and ignored-snapshot twins each produce their
+   specific expected failure. This is movement only; attack/dodge/interact/
+   camera, prediction and reconciliation remain local or absent. See
+   [scope and limits](O2-INPUT.md). The full 16-stage v0.10.0 regression passed
+   afterward (70 Python tests at run time, 27 input checks, 16 damage-ledger
+   checks, 22 input-command checks and 0 original-file mismatches; four test-tier
+   orchestration tests pass separately afterward).
 
 ## Late validation with a friend
 

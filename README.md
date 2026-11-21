@@ -3,9 +3,9 @@
 Co-op mod research and development for Going Under.
 
 **Status (2026-11-20): experimental local actors plus two-client loopback
-networking, enemy targeting and native enemy-movement mirroring (v0.9.0).
-Combat replication is in progress and does not yet pass. Not a playable online
-co-op release.**
+networking, enemy targeting, native enemy-movement mirroring, scoped
+electric-attack health replication and host-authoritative guest movement input
+(v0.10.0). Not a playable online co-op release.**
 
 ## Project status
 
@@ -19,21 +19,29 @@ co-op release.**
 | Test-only networking | UDP loopback session/player ids, pose replication and packet rejection passed between two real clients. Guest movement of 3.066 m matched the host's remote actor; stale, wrong-epoch and host-id-claim packets were rejected. |
 | Network enemy target mirror (O4a) | Native host acquisition of P2, a distance-swap control and guest target mirroring passed. Both intentional-failure controls passed: bypassing the guest reacquisition veto or omitting target application produced the expected mismatch. This is one inactive enemy mirror, not general AI or combat replication. |
 | Native host enemy movement (O4b) | One authored CubicleGroundBot moved 3.71 m under its native brain, with 102 matching guest pose samples and zero measured freeze drift. Mirror entry guards and omitted-pose/enabled-guest-AI mutation controls passed. This is one fixture, not general enemy or combat support. |
-| Combat replication (O4c) | **Not passing.** Exactly-once health ledger verified with 16 production checks and mutation scorers, but the host-side native attack fixture has not produced a hit yet. See [the combat notes](docs/O4C-COMBAT.md). |
+| Combat replication (O4c) | One native electric pulse hit remote P2; the guest applied the health loss once despite duplicate delivery. Wrong-target and duplicate-application mutation controls passed. Stationary fixture with animator held, not general animated combat. See [the combat notes](docs/O4C-COMBAT.md). |
+| Host-authoritative movement input (O2) | Guest movement intent is validated on the host, simulated by the native player path and returned as host snapshots. The guest followed host poses with zero measured error. Dropped input, accepted stale input, never-cleared input and ignored-snapshot mutation controls passed. Movement only; attack/dodge/interact/camera, prediction and reconciliation remain. See [the input notes](docs/O2-INPUT.md). |
 
 The loopback suite passed its positive gate and three intentional-failure controls
 (disabled pose application, accepted stale state and accepted host-id claims).
-These checks **do not establish full host-authoritative gameplay**: the probe
-replicates guest poses, not host-simulated guest input.
+The O2 gate additionally shows host-simulated guest **movement** input, but the
+remaining actions are still local. These checks **do not establish full
+host-authoritative gameplay**, prediction, lag tolerance or a production session.
 
 ### Verification scope
 
-- **63 Python tooling/scorer tests** pass, plus **27 production input-mapping
-  checks** (source unchanged since they passed).
-- **Last full serial regression (v0.8.1) passed:** startup skipping, loader,
-  coexistence, loopback networking, local actors, local targeting, O4a network
-  targeting, O4b native enemy movement and controller routing, including their
-  intentional-failure controls. It has not been rerun since O4c work began.
+- **74 Python tooling/scorer tests**, **27 production input-mapping checks**,
+  **16 production damage-ledger checks** and **22 production input-command
+  checks** pass. The full milestone run covered 70 tests; the four added
+  verification-orchestration tests pass separately.
+- **Full 16-stage serial regression (v0.10.0) passed**, DLL SHA-256
+  `3a165a59acb5e7103af4deb7f4260634e7accea9f02ea5e45b12af4da5edf363`:
+  startup skipping, loader, coexistence, loopback networking, local actors,
+  local targeting, O4a network targeting, O4b native enemy movement, O4c damage,
+  O2 movement input and controller routing, including their intentional-failure
+  controls. Original 207 game files rehashed with zero mismatches afterward.
+- The suite is long. Use the tiers below for routine work and reserve the full
+  run for milestones; a quick pass is not a full regression.
 - Earlier attempts hit lifecycle timeouts. Those remain recorded failures;
   the final pass does not establish that their unknown root cause is fixed.
 - Physical controllers are **not required**. Tests use scripted in-game
@@ -43,19 +51,21 @@ replicates guest poses, not host-simulated guest input.
 
 - Investigate intermittent native startup/shutdown hangs in the two-client harness;
   a PASS trace does not override a failed or timed-out process exit.
-- Finish O4c: get a genuine native host attack and replicate its target-attributed
-  damage exactly once; the current attack fixture throws on unconfigured nodes.
+- Extend combat beyond the stationary electric fixture: animated attacks,
+  armor, invincibility, knockback and other damage effects.
 - Generalize host-only enemy AI beyond the tested fixture.
-- Host-authoritative input, combat, inventory, loot and currency.
+- Remaining host-authoritative actions (attack, dodge, interact, camera,
+  inventory), client prediction/reconciliation and per-client camera mapping.
+- Host-authoritative combat effects, armor/invincibility, inventory, loot and
+  currency.
 - Down/revive, party wipes, shared dungeon/floor identity and save persistence.
 - Remote animation, per-player HUD and camera work; local split-screen and
   controller assignment for four or more seats.
 - Disconnect/reconnect, packet loss/jitter/reordering and soak tests.
 - Steam transport/lobbies, multi-machine validation and networked 4+ player scale.
 
-**Next milestone:** complete O4c native attack/damage replication, then broader
-enemy coverage and network-chaos tests.
-Full input authority (O2) remains incomplete.
+**Next milestone:** finish the remaining O2 actions and prediction, then broader
+enemy/combat coverage and network-chaos tests.
 
 ## Target
 
@@ -103,7 +113,8 @@ hook discovery and clean exit. Its intentionally broken hook gate must fail.
 Automated probes now skip the game's timed logo/stinger presentation and stop
 title-screen videos automatically. The existing gameplay probes also bypass the
 story intro in isolated saves. Ordinary play is unchanged; engine loading and
-Steam authentication still run normally.
+Steam authentication still run normally. Automated tests keep running without
+window focus. The combat fixture clears entrance dialogue on both clients.
 
 The startup control suite checks the shortcut against unskipped native startup:
 
@@ -122,6 +133,8 @@ python tools/controller_test.py --suite
 python tools/net_test.py --suite
 python tools/net_ai_test.py --suite
 python tools/net_ai_test.py --brain --suite
+python tools/damage_test.py --suite
+python tools/input_test.py --suite
 ```
 
 The bot loads the isolated office save, spawns additional characters, checks
@@ -139,10 +152,33 @@ The O4a suite tests native host enemy acquisition and a guarded guest target
 mirror; see [its narrow scope and controls](docs/NETWORK-AI.md).
 The `--brain` suite adds spawn-time entry guards, a collision-fixture fingerprint,
 native host movement, per-sequence pose agreement and a two-second frozen-mirror gate.
+The damage suite checks a native electric pulse and exactly-once guest health
+replication, plus wrong-target and duplicate-application controls.
+The input suite sends guest movement intent to the host, lets the native player
+path simulate P2, and checks that the guest follows host snapshots. Its dropped,
+stale, timeout and ignored-snapshot mutations must each fail.
 See [prototype details and limitations](docs/LOCAL-PROTOTYPE.md).
 
-To run the expanded regression serially (build, loader, coexistence, networking,
-actors, local/network targeting, native enemy movement and controllers):
+### Test tiers
+
+Most edits do not need every real-game gate. Use the smallest tier that covers
+the change, and run the full regression before a milestone or commit that claims
+a new phase.
+
+```sh
+python tools/verify.py                 # offline tests/scorers only; no game launch
+python tools/verify.py --quick         # offline + build + loader + input positive gate
+python tools/verify.py --quick --focus net-damage
+python tools/verify.py --stages net-input,controllers
+python tools/verify.py --list
+python tools/verify.py --integration   # full 16-stage milestone regression
+```
+
+`--quick` runs one positive gate for the focused area, not its mutation twins
+and not the other suites. `--stages` runs exactly the named stages. The full
+integration command (build, loader, coexistence, networking, actors,
+local/network targeting, native enemy movement, damage, movement input and
+controllers) uses Steam and visible isolated game windows:
 
 ```sh
 python tools/verify.py --integration

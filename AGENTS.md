@@ -29,7 +29,12 @@ temporary workspace, not the NAS. Use the sandbox launchers.
 - `python tools/seat_test.py --windowed --suite`: rendered independent-actor gates.
 - `python tools/test_pad.py`: production controller-frame mapping tests.
 - `python tools/controller_test.py --suite`: native input-routing and ownership gates.
-- `python tools/verify.py --integration`: full serial regression (uses Steam/game windows).
+- `python tools/verify.py`: offline tests/scorers only (fast; no game launch).
+- `python tools/verify.py --quick`: build, loader and one positive focus gate
+  for routine changes; this is not a full regression.
+- `python tools/verify.py --stages NAME[,NAME]`: only the named stages.
+- `python tools/verify.py --integration`: full serial regression for milestones
+  (uses Steam/game windows). Reserve this for completed phases and releases.
 
 The plugin has a diagnostic default and an opt-in local actor prototype, not
 online co-op. Passing a loader gate is not multiplayer QA. Only claim tests that

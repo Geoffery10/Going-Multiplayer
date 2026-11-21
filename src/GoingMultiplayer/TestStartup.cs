@@ -21,6 +21,8 @@ namespace GoingMultiplayer
         {
             plugin = owner;
             fast = skip;
+            Application.runInBackground = true;
+            plugin.Report("GMP_TEST_BACKGROUND enabled=" + Application.runInBackground);
             var harmony = new Harmony("goingmultiplayer.qa-startup");
             harmony.Patch(AccessTools.Method(typeof(AggroCrabStinger), "Start"),
                 prefix: new HarmonyMethod(typeof(TestStartup), "StartStinger"));
