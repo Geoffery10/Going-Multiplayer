@@ -332,6 +332,54 @@ namespace GoingMultiplayer
                 + " controls_blocked=" + (hostActor != null && hostActor.controlsBlocked)
                 + " force_single=" + (hostActor != null && hostActor.forceSingleItem));
 
+            // M3a control-basis gate: movement must be replayed in the sender's
+            // camera frame. MoveX=1 at yaw 90 must give -Z, at yaw 270 +Z.
+            Vector3 basis90 = Vector3.zero;
+            Vector3 basis270 = Vector3.zero;
+            bool got90 = false;
+            bool got270 = false;
+            float lastBasis = -2f;
+            float basisStart = Time.realtimeSinceStartup;
+            float basisEnd = basisStart + 1.4f;
+            while (Time.realtimeSinceStartup < basisEnd)
+            {
+                float basisNow = Time.realtimeSinceStartup;
+                if (!isHost && basisNow - lastBasis >= 0.1f)
+                {
+                    float yaw = basisNow - basisStart < 0.7f ? 90f : 270f;
+                    session.SendCommand(new InputCommand { MoveX = 1f, Yaw = yaw },
+                        basisNow);
+                    lastBasis = basisNow;
+                }
+                Pump(session);
+                if (hostActor && remote.Seat.Network != null)
+                {
+                    float yaw = remote.Seat.Network.ControlYaw;
+                    if (!got90 && Mathf.Abs(Mathf.DeltaAngle(yaw, 90f)) < 5f)
+                    {
+                        basis90 = hostActor.GetInputVector();
+                        got90 = true;
+                    }
+                    if (!got270 && Mathf.Abs(Mathf.DeltaAngle(yaw, 270f)) < 5f)
+                    {
+                        basis270 = hostActor.GetInputVector();
+                        got270 = true;
+                    }
+                }
+                if (isHost && got90 && got270) break;
+                yield return null;
+            }
+            if (!isHost) session.SendCommand(new InputCommand(),
+                Time.realtimeSinceStartup);
+            bool basisOk = got90 && got270
+                && Mathf.Abs(basis90.z + 1f) < 0.15f && Mathf.Abs(basis90.x) < 0.15f
+                && Mathf.Abs(basis270.z - 1f) < 0.15f && Mathf.Abs(basis270.x) < 0.15f;
+            plugin.Report("GMP_SESSION_BASIS role=" + role
+                + " got90=" + got90 + " got270=" + got270
+                + " x90=" + Fmt(basis90.x) + " z90=" + Fmt(basis90.z)
+                + " x270=" + Fmt(basis270.x) + " z270=" + Fmt(basis270.z)
+                + " basis_ok=" + basisOk);
+
             // M3a reconciliation gate: the guest keeps its local player still
             // while still commanding the host to walk, so the two poses diverge.
             // The host's authoritative snapshots must pull the guest back.
@@ -366,6 +414,7 @@ namespace GoingMultiplayer
                 ? Vector3.Distance(local.transform.position, Reconciliation.LastAuthoritative)
                 : XZDistance(local.transform.position, drift);
             plugin.Report("GMP_SESSION_RECON role=" + role
+                + " basis_ok=" + basisOk
                 + " focus_host=" + focusHost + " focus_local=" + focusLocal
                 + " cam_delta=" + Fmt(cameraDelta)
                 + " inv_moved=" + invMoved + " inv_local_moved=" + invLocalMoved
@@ -480,7 +529,7 @@ namespace GoingMultiplayer
                 && dungeonDelta > 0.05f
                 && (isHost
                     ? hostSawAttack && actionReceived >= 1
-                        && focusHost && cameraDelta <= 0.05f
+                        && focusHost && cameraDelta <= 0.05f && basisOk
                     : !localSawAttack && actionSent >= 1 && !focusLocal)
                 && (isHost || (reconCorrections >= 1 && reconError <= 0.5f));
             plugin.Report("GMP_SESSION_RESULT " + (pass ? "PASS" : "FAIL")
@@ -501,6 +550,7 @@ namespace GoingMultiplayer
                 + " attack_host=" + hostSawAttack
                 + " attack_local=" + localSawAttack
                 + " cmd_sent=" + actionSent + " cmd_recv=" + actionReceived
+                + " basis_ok=" + basisOk
                 + " focus_host=" + focusHost + " focus_local=" + focusLocal
                 + " cam_delta=" + Fmt(cameraDelta)
                 + " inv_moved=" + invMoved + " inv_local_moved=" + invLocalMoved
@@ -529,7 +579,7 @@ namespace GoingMultiplayer
                 + " rejected=" + session.Rejected + " stale=" + session.Stale
                 + " remote_delta=0 dungeon_delta=0 actor_alive=False health_kept=False"
                 + " attack_host=False attack_local=False cmd_sent=0 cmd_recv=0"
-                + " focus_host=False focus_local=False cam_delta=0"
+                + " basis_ok=False focus_host=False focus_local=False cam_delta=0"
                 + " inv_moved=False inv_local_moved=False"
                 + " recon_delta=0 recon_corrections=0 recon_hard=0 recon_error=0"
                 + " view_ok=False ready_barrier=False done_barrier=False"

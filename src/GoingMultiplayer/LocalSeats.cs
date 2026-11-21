@@ -77,6 +77,10 @@ namespace GoingMultiplayer
             // CameraController: focus would snap the host's camera to a puppet.
             patches.Patch(AccessTools.Method(typeof(Player), "UpdateFocus"),
                 prefix: Method("RemoteFocusGuard"));
+            // A networked actor must steer with the sender's control basis, not
+            // the local camera, or the guest's controls come out mirrored.
+            patches.Patch(AccessTools.Method(typeof(Player), "GetInputVector"),
+                prefix: Method("GetInputVectorPrefix"));
             foreach (string name in new[] { "SetCostume", "RefreshCostume" })
                 patches.Patch(AccessTools.Method(typeof(PlayerView), name),
                     prefix: Method("ViewContext"), finalizer: Method("RestoreContext"));
@@ -235,6 +239,27 @@ namespace GoingMultiplayer
             seat.Costume.material = seat.Material;
             seat.Palette = chosen.name;
             seat.Player.view.SetCostume(seat.Costume);
+        }
+
+        private static bool GetInputVectorPrefix(Player __instance, ref Vector3 __result)
+        {
+            Seat seat;
+            if (!Inputs.TryGetValue(__instance.input, out seat)) return true;
+            if (seat.Network == null) return true;
+            if (__instance.controlsBlocked)
+            {
+                __result = Vector3.zero;
+                return false;
+            }
+            Vector3 raw = new Vector3(seat.Network.Command.MoveX, 0f,
+                seat.Network.Command.MoveY);
+            raw = Vector3.ClampMagnitude(raw, 1f);
+            float magnitude = raw.magnitude;
+            if (magnitude < __instance.stats.movementDeadZone) raw = Vector3.zero;
+            else if (magnitude < 1f && magnitude > __instance.stats.inputSnapRange)
+                raw.Normalize();
+            __result = Quaternion.Euler(0f, seat.Network.ControlYaw, 0f) * raw;
+            return false;
         }
 
         private static void RemoteFocusGuard(Player __instance)

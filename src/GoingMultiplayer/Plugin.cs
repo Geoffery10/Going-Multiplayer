@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.14.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.15.0")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -46,7 +46,7 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.14.0 networking=steam_coop");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.15.0 networking=steam_coop");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             startupProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-startup-probe") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
@@ -103,6 +103,9 @@ namespace GoingMultiplayer
                 + " unity=" + Application.unityVersion);
             if (smokeMode && Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-negative-hook") >= 0)
                 hooksFound = false;
+            SaveGuard.Install();
+            SceneSync.Install();
+            SessionSave.CheckLeftovers(Report);
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (smokeMode || seatProbe || targetProbe || netProbe || netAiProbe || netDamageProbe
                 || netInputProbe || sessionProbe || steamProbe || saveProbe || coopMenuProbe)

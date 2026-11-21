@@ -14,7 +14,13 @@ namespace GoingMultiplayer
             PlayerInputRewired input = player.input;
             if (input == null) return command;
 
+            // The game steers relative to CameraController.relativeControlSpot,
+            // which is the local camera's yaw. Send that basis so the host can
+            // replay movement in the sender's frame instead of its own.
             command.Yaw = player.transform.eulerAngles.y;
+            if (CameraController.instance != null
+                && CameraController.instance.relativeControlSpot != null)
+                command.Yaw = CameraController.instance.relativeControlSpot.eulerAngles.y;
             if (!input.IsEnabled()) return command;
 
             command.MoveX = PadFrame.Clean(input.GetHorizontalAxis());

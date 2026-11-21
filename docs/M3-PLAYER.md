@@ -1,6 +1,6 @@
 # M3 player replication (started)
 
-Status: **foundation started**, v0.14.0, 2026-11-21. Not a playable M3 slice yet.
+Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet.
 
 ## Implemented foundation
 
@@ -42,6 +42,25 @@ Status: **foundation started**, v0.14.0, 2026-11-21. Not a playable M3 slice yet
   driven `remote_delta`; the guest reports `attack_local=False`. Mutation twins
   fail as expected: `--negative command` (host ignores commands) and
   `--negative snapshot` (guest ignores host snapshots).
+
+## Session save and scene sync (2026-11-21)
+
+- On join the host sends its active save file in reliable chunks. The guest
+  writes it to slot 2, first backing up that slot to
+  `GoingUnderSave_2.coopbak`, then mounts it. While it is mounted every game
+  save is blocked (`SaveGuard`), so an autosave can never touch the guest's
+  real slots 0/1. Leaving restores slot 2 and remounts the guest's own slot; a
+  crash leaves the backup and the next launch logs `GMP_SAVE_BACKUP pending=`.
+- The host announces its scene and the guest loads it when it differs, so both
+  clients play the same office variant (`FizzleFlagshipFinal` vs `FizzleDARK`
+  was a real mismatch) and the same dungeon selection.
+- Every scene announcement carries a seed. Both clients call
+  `Random.InitState(seed)` immediately before `DungeonManager.GenerateFloorRoutine`
+  so a floor starts from the same RNG state. Not yet proven with two clients;
+  a host-built layout manifest is the fallback.
+- Only the host drives scene changes. Guest-initiated doors/floors are not
+  forwarded yet, and joining mid-dungeon cannot reproduce a floor that was
+  already generated.
 
 ## Reconciliation (2026-11-21)
 

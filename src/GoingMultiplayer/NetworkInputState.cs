@@ -20,6 +20,8 @@ namespace GoingMultiplayer
 
         internal InputCommand Command;
         internal uint LastSequence;
+        // Yaw of the sender's camera/control basis for this command.
+        internal float ControlYaw;
 
         private PlayerButtons pendingPressed;
         private PlayerButtons pendingReleased;
@@ -39,6 +41,7 @@ namespace GoingMultiplayer
             Command.CameraX = PadFrame.Clean(command.CameraX);
             Command.CameraY = PadFrame.Clean(command.CameraY);
             Command.Inventory = command.Inventory > 0 ? 1 : command.Inventory < 0 ? -1 : 0;
+            ControlYaw = command.Yaw;
             LastSequence = sequence;
 
             int frame = Frame;

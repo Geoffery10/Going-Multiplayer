@@ -168,6 +168,32 @@ internal static class SessionCoreTests
         Check(receivedByGuest.Count == guestPeerCountBefore, "authority snapshot is not a peer snapshot");
         Check(Math.Abs(ownSnapshots[0].X + 7f) < 0.001f, "authority snapshot value");
 
+        // Save transfer: the host pushes a save, the guest assembles it whole.
+        var saves = new List<byte[]>();
+        guest.SaveReceived += delegate(byte[] bytes) { saves.Add(bytes); };
+        var payload = new byte[2000];
+        for (int i = 0; i < payload.Length; i++) payload[i] = (byte)(i * 7);
+        host.SendSave(payload, now);
+        Pump(host, guest, ref now);
+        Check(saves.Count == 1 && saves[0].Length == payload.Length, "save transfer length");
+        bool savesMatch = saves.Count == 1;
+        for (int i = 0; savesMatch && i < payload.Length; i++)
+            if (saves[0][i] != payload[i]) savesMatch = false;
+        Check(savesMatch, "save transfer bytes");
+
+        // Scene announcement.
+        string announced = null;
+        int announcedSeed = 0;
+        guest.SceneReceived += delegate(string scene, int seed)
+        {
+            announced = scene;
+            announcedSeed = seed;
+        };
+        host.SendScene("Dungeon_Joblin", 424242, now);
+        Pump(host, guest, ref now);
+        Check(announced == "Dungeon_Joblin", "scene announcement");
+        Check(announcedSeed == 424242, "scene seed");
+
         // A guest may not claim the host's player id.
         int hostRejectedBefore = host.Rejected;
         int hostPeerCountBefore = receivedByHost.Count;

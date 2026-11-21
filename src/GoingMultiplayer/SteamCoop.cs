@@ -26,6 +26,8 @@ namespace GoingMultiplayer
         private string build;
         private float lastSnapshot = -1f;
         private float lastCommand = -1f;
+        private bool initialSyncSent;
+        private string pendingScene;
         private int remoteId;
         private NetworkActor remote;
         private bool kicked;
@@ -217,6 +219,23 @@ namespace GoingMultiplayer
             Player local = Player.singlePlayer;
             if (!local) return;
             float now = Time.realtimeSinceStartup;
+            if (isHost && !initialSyncSent)
+            {
+                initialSyncSent = true;
+                byte[] save = ReadSaveSlot();
+                if (save != null && save.Length > 0)
+                {
+                    session.SendSave(save, now);
+                    plugin.Report("GMP_COOP_SAVE_SEND bytes=" + save.Length
+                        + " hash=" + SessionSave.Hash(save));
+                }
+                string scene = UnityEngine.SceneManagement.SceneManager
+                    .GetActiveScene().name;
+                int seed = SceneSync.NextSeed();
+                SceneSync.PendingSeed = seed;
+                session.SendScene(scene, seed, now);
+                plugin.Report("GMP_COOP_SCENE_SEND name=" + scene + " seed=" + seed);
+            }
             if (now - lastSnapshot >= 0.05f)
             {
                 session.SendSnapshot(ActorRegistry.Capture(local), now);
@@ -317,6 +336,15 @@ namespace GoingMultiplayer
         {
             pauseTabInstalled = false;
             if (session == null || state != CoopState.Running) return;
+            if (isHost && session.State == SessionState.Playing)
+            {
+                string scene = UnityEngine.SceneManagement.SceneManager
+                    .GetActiveScene().name;
+                int seed = SceneSync.NextSeed();
+                SceneSync.PendingSeed = seed;
+                session.SendScene(scene, seed, Time.realtimeSinceStartup);
+                plugin.Report("GMP_COOP_SCENE_SEND name=" + scene + " seed=" + seed);
+            }
             Player local = Player.singlePlayer;
             if (!local) return;
             Vector3 spawn;
@@ -395,6 +423,23 @@ namespace GoingMultiplayer
                     if (actor != null && actor.Seat != null && actor.Seat.Network != null)
                         actor.Seat.Network.Apply(command, peer.LastSequence);
                 };
+                session.SaveReceived += delegate(byte[] bytes)
+                {
+                    if (isHost) return;
+                    SessionSave.Install(bytes, plugin.Report);
+                    if (!string.IsNullOrEmpty(pendingScene))
+                    {
+                        string scene = pendingScene;
+                        pendingScene = null;
+                        ApplyHostScene(scene);
+                    }
+                };
+                session.SceneReceived += delegate(string scene, int seed)
+                {
+                    if (isHost) return;
+                    if (seed != 0) SceneSync.PendingSeed = seed;
+                    ApplyHostScene(scene);
+                };
                 session.Kicked += delegate(Peer peer) { kicked = true; };
                 session.PeerLeft += delegate(Peer peer)
                 {
@@ -463,12 +508,48 @@ namespace GoingMultiplayer
                 transport.Close();
                 transport = null;
             }
+            if (!isHost) SessionSave.Restore(plugin.Report);
+            initialSyncSent = false;
+            pendingScene = null;
             ActorRegistry.Reset();
             remote = null;
             lobby.Leave();
             state = CoopState.Idle;
             lastSnapshot = -1f;
             lastCommand = -1f;
+        }
+
+        private static byte[] ReadSaveSlot()
+        {
+            try
+            {
+                string path = Path.Combine(Application.persistentDataPath,
+                    SaveLoad.GetSavePath(SaveLoad.CURRENT_SAVE_INDEX));
+                return File.Exists(path) ? File.ReadAllBytes(path) : null;
+            }
+            catch (Exception) { return null; }
+        }
+
+        private void ApplyHostScene(string name)
+        {
+            if (isHost || string.IsNullOrEmpty(name)) return;
+            if (session != null && session.SaveInProgress)
+            {
+                pendingScene = name;
+                return;
+            }
+            string active = UnityEngine.SceneManagement.SceneManager
+                .GetActiveScene().name;
+            if (active == name) return;
+            if (!Application.CanStreamedLevelBeLoaded(name))
+            {
+                status = "Host is in an unknown scene: " + name;
+                plugin.Report("GMP_COOP_SCENE_MISSING name=" + name);
+                return;
+            }
+            plugin.Report("GMP_COOP_SCENE_LOAD name=" + name);
+            status = "Loading the host's scene: " + name;
+            GUIManager.instance.LoadScene(name);
         }
 
         private void Fail(string reason)

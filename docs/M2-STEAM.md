@@ -1,6 +1,6 @@
 # M2 Steam transport and lobby
 
-Status: **in progress**, started v0.12.0, current build v0.14.0, 2026-11-21.
+Status: **in progress**, started v0.12.0, current build v0.15.0, 2026-11-21.
 This is the first production-shaped Steam path, not a playable online co-op
 session.
 

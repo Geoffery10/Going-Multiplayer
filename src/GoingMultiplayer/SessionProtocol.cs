@@ -21,6 +21,8 @@ namespace GoingMultiplayer
         Done = 8,
         Ready = 9,
         Kick = 10,
+        Save = 11,
+        Scene = 12,
     }
 
     internal struct PlayerSnapshot
@@ -254,6 +256,75 @@ namespace GoingMultiplayer
                     writer.Write((int)command.Released);
                     writer.Write(command.Inventory);
                 });
+        }
+
+        internal static byte[] SaveChunk(ushort protocol, uint epoch, int playerId,
+            uint sequence, uint transfer, int index, int total, byte[] chunk)
+        {
+            return Build(MessageType.Save, protocol, epoch, playerId, sequence,
+                delegate(BinaryWriter writer)
+                {
+                    writer.Write(transfer);
+                    writer.Write((ushort)index);
+                    writer.Write((ushort)total);
+                    writer.Write((ushort)chunk.Length);
+                    writer.Write(chunk);
+                });
+        }
+
+        internal static bool TrySaveChunk(byte[] data, out uint transfer, out int index,
+            out int total, out byte[] chunk)
+        {
+            transfer = 0;
+            index = 0;
+            total = 0;
+            chunk = null;
+            try
+            {
+                using (var reader = OpenBody(data, MessageType.Save))
+                {
+                    if (reader == null) return false;
+                    transfer = reader.ReadUInt32();
+                    index = reader.ReadUInt16();
+                    total = reader.ReadUInt16();
+                    int length = reader.ReadUInt16();
+                    if (total <= 0 || total > 1024 || index < 0 || index >= total || length > 1024)
+                        return false;
+                    chunk = reader.ReadBytes(length);
+                    return chunk.Length == length;
+                }
+            }
+            catch (IOException) { return false; }
+            catch (ArgumentException) { return false; }
+        }
+
+        internal static byte[] Scene(ushort protocol, uint epoch, int playerId,
+            uint sequence, string scene, int seed)
+        {
+            return Build(MessageType.Scene, protocol, epoch, playerId, sequence,
+                delegate(BinaryWriter writer)
+                {
+                    WriteString(writer, scene);
+                    writer.Write(seed);
+                });
+        }
+
+        internal static bool TryScene(byte[] data, out string scene, out int seed)
+        {
+            scene = null;
+            seed = 0;
+            try
+            {
+                using (var reader = OpenBody(data, MessageType.Scene))
+                {
+                    if (reader == null) return false;
+                    scene = ReadString(reader);
+                    seed = reader.ReadInt32();
+                    return !string.IsNullOrEmpty(scene);
+                }
+            }
+            catch (IOException) { return false; }
+            catch (ArgumentException) { return false; }
         }
 
         internal static byte[] Control(MessageType type, ushort protocol, uint epoch,
@@ -523,6 +594,12 @@ namespace GoingMultiplayer
         // One sender sequence for every message type. The receiver keeps a
         // single per-peer sequence, so snapshots and commands must share it.
         private uint sequence;
+        private uint saveTransferId;
+        private uint saveTransfer;
+        private int saveTotal;
+        private int saveCount;
+        private byte[][] saveChunks;
+        private const int MaxSaveBytes = 512 * 1024;
 
         internal NetSession(SessionConfig config, ITransport transport, Func<uint> epochSource = null)
         {
@@ -551,6 +628,8 @@ namespace GoingMultiplayer
         internal int SnapshotsReceived { get; private set; }
         internal int CommandsSent { get; private set; }
         internal int CommandsReceived { get; private set; }
+        internal int SavesReceived { get; private set; }
+        internal bool SaveInProgress { get { return saveChunks != null; } }
         internal int Rejected { get; private set; }
         internal int Stale { get; private set; }
         internal bool AllPeersReady
@@ -587,6 +666,8 @@ namespace GoingMultiplayer
         // Host-published state for this client's own actor (server correction).
         internal Action<PlayerSnapshot> OwnSnapshotReceived = delegate { };
         internal Action<Peer, InputCommand> CommandReceived = delegate { };
+        internal Action<byte[]> SaveReceived = delegate { };
+        internal Action<string, int> SceneReceived = delegate { };
         internal Action<SessionState> StateChanged = delegate { };
         internal Action<Peer> Kicked = delegate { };
 
@@ -666,6 +747,42 @@ namespace GoingMultiplayer
             foreach (Peer peer in Peers.All)
                 if (peer.Connected) transport.Send(peer.Key, data, false);
             SnapshotsSent++;
+        }
+
+        // Save transfer: the host pushes its active save so the guest plays the
+        // same progression. Small chunks keep every transport happy (the
+        // loopback transport buffers 2 KB).
+        internal void SendSave(byte[] data, double now)
+        {
+            if (data == null || data.Length == 0 || data.Length > MaxSaveBytes) return;
+            if (State != SessionState.Playing && State != SessionState.Hosting) return;
+            const int ChunkSize = 700;
+            int total = (data.Length + ChunkSize - 1) / ChunkSize;
+            if (total > 1024) return;
+            saveTransferId++;
+            for (int i = 0; i < total; i++)
+            {
+                int offset = i * ChunkSize;
+                int length = Math.Min(ChunkSize, data.Length - offset);
+                var chunk = new byte[length];
+                Buffer.BlockCopy(data, offset, chunk, 0, length);
+                sequence++;
+                byte[] packet = SessionCodec.SaveChunk(config.ProtocolVersion, Epoch,
+                    LocalPlayerId, sequence, saveTransferId, i, total, chunk);
+                foreach (Peer peer in Peers.All)
+                    if (peer.Connected) transport.Send(peer.Key, packet, true);
+            }
+        }
+
+        internal void SendScene(string scene, int seed, double now)
+        {
+            if (string.IsNullOrEmpty(scene)) return;
+            if (State != SessionState.Playing && State != SessionState.Hosting) return;
+            sequence++;
+            byte[] data = SessionCodec.Scene(config.ProtocolVersion, Epoch, LocalPlayerId,
+                sequence, scene, seed);
+            foreach (Peer peer in Peers.All)
+                if (peer.Connected) transport.Send(peer.Key, data, true);
         }
 
         internal void SendCommand(InputCommand command, double now)
@@ -834,6 +951,21 @@ namespace GoingMultiplayer
                 }
                 else if (SnapshotReceived != null) SnapshotReceived(peer, snapshot);
             }
+            else if (type == MessageType.Save)
+            {
+                AcceptSaveChunk(packet.Data);
+            }
+            else if (type == MessageType.Scene)
+            {
+                string scene;
+                int seed;
+                if (!SessionCodec.TryScene(packet.Data, out scene, out seed))
+                {
+                    Rejected++;
+                    return;
+                }
+                if (SceneReceived != null) SceneReceived(scene, seed);
+            }
             else if (type == MessageType.Command)
             {
                 InputCommand command;
@@ -849,6 +981,49 @@ namespace GoingMultiplayer
             {
                 Rejected++;
             }
+        }
+
+        private void AcceptSaveChunk(byte[] data)
+        {
+            uint transfer;
+            int index, total;
+            byte[] chunk;
+            if (!SessionCodec.TrySaveChunk(data, out transfer, out index, out total, out chunk))
+            {
+                Rejected++;
+                return;
+            }
+            if (saveChunks == null || transfer != saveTransfer || total != saveTotal)
+            {
+                saveTransfer = transfer;
+                saveTotal = total;
+                saveChunks = new byte[total][];
+                saveCount = 0;
+            }
+            if (saveChunks[index] == null)
+            {
+                saveChunks[index] = chunk;
+                saveCount++;
+            }
+            if (saveCount < saveTotal) return;
+            int length = 0;
+            foreach (byte[] part in saveChunks) length += part.Length;
+            if (length <= 0 || length > MaxSaveBytes)
+            {
+                saveChunks = null;
+                Rejected++;
+                return;
+            }
+            var assembled = new byte[length];
+            int offset = 0;
+            foreach (byte[] part in saveChunks)
+            {
+                Buffer.BlockCopy(part, 0, assembled, offset, part.Length);
+                offset += part.Length;
+            }
+            saveChunks = null;
+            SavesReceived++;
+            if (SaveReceived != null) SaveReceived(assembled);
         }
 
         private void HandleHello(TransportPacket packet, double now)
