@@ -108,8 +108,15 @@ namespace GoingMultiplayer
         {
             NetworkActor actor;
             if (!actors.TryGetValue(playerId, out actor)) return;
-            // Never let a peer's snapshot fight an actor this host simulates.
-            if (actor.Simulated) return;
+            if (actor.Simulated)
+            {
+                // Position is simulated here, but the owner's health is
+                // authoritative for itself (damage and revives).
+                actor.LastHealth = snapshot.Health;
+                if (actor.Seat != null && actor.Seat.Player)
+                    actor.Seat.Player.health = snapshot.Health;
+                return;
+            }
             actor.LastPosition = new Vector3(snapshot.X, snapshot.Y, snapshot.Z);
             actor.LastYaw = snapshot.Yaw;
             actor.LastHealth = snapshot.Health;
@@ -206,6 +213,10 @@ namespace GoingMultiplayer
         internal void Push(Vector3 position, float yaw, float health, byte animation)
         {
             Pushed++;
+            // Health and the downed pose come from the owner's snapshot.
+            player.health = health;
+            if (player.view != null && player.view.anim != null)
+                player.view.anim.SetBool("Prone", player.health + player.overHealth <= 0f);
             samples.Add(new Sample
             {
                 Time = Time.realtimeSinceStartup,

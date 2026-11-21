@@ -213,6 +213,18 @@ internal static class SessionCoreTests
         Check(gotTeleport && Math.Abs(tx - 3f) < 0.001f && Math.Abs(tz + 2f) < 0.001f,
             "party teleport");
 
+        // Revive message.
+        int reviveTarget = 0;
+        float reviveAmount = 0f;
+        guest.ReviveReceived += delegate(int id, float amount)
+        {
+            reviveTarget = id;
+            reviveAmount = amount;
+        };
+        host.SendRevive(2, 6f, now);
+        Pump(host, guest, ref now);
+        Check(reviveTarget == 2 && Math.Abs(reviveAmount - 6f) < 0.001f, "revive message");
+
         // A guest may not claim the host's player id.
         int hostRejectedBefore = host.Rejected;
         int hostPeerCountBefore = receivedByHost.Count;

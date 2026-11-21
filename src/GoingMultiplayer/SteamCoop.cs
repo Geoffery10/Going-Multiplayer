@@ -227,6 +227,15 @@ namespace GoingMultiplayer
             Player local = Player.singlePlayer;
             if (!local) return;
             float now = Time.realtimeSinceStartup;
+            SessionRevive.Active = true;
+            Player partner = remote != null && remote.Seat != null ? remote.Seat.Player : null;
+            SessionRevive.Tick(local, partner, remoteId,
+                delegate(int id, float amount)
+                {
+                    session.SendRevive(id, amount, Time.realtimeSinceStartup);
+                    plugin.Report("GMP_COOP_REVIVE_SEND target=" + id
+                        + " amount=" + amount.ToString("F0", Culture));
+                });
             if (isHost && now - lastSceneBeat >= 2f)
             {
                 lastSceneBeat = now;
@@ -517,6 +526,13 @@ namespace GoingMultiplayer
                     if (seed != 0) SceneSync.PendingSeed = seed;
                     ApplyHostScene(scene);
                 };
+                session.ReviveReceived += delegate(int targetId, float amount)
+                {
+                    if (session == null || targetId != session.LocalPlayerId) return;
+                    SessionRevive.Revive(Player.singlePlayer, amount);
+                    plugin.Report("GMP_COOP_REVIVED amount=" + amount.ToString("F0",
+                        Culture));
+                };
                 session.TeleportReceived += delegate(float dx, float dy, float dz)
                 {
                     Vector3 delta = new Vector3(dx, dy, dz);
@@ -637,6 +653,7 @@ namespace GoingMultiplayer
                 transport.Close();
                 transport = null;
             }
+            SessionRevive.Reset();
             if (!isHost) SessionSave.Restore(plugin.Report);
             if (forcedBackground)
             {

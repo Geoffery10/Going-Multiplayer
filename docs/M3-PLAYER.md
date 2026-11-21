@@ -43,6 +43,21 @@ Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet
   fail as expected: `--negative command` (host ignores commands) and
   `--negative snapshot` (guest ignores host snapshots).
 
+## Down and revive (2026-11-21)
+
+- While a session is live, `Entity.TriggerDeath` is intercepted for players: a
+  lethal hit puts them **down** (health 0, prone pose, no input) instead of
+  running the game's death/game-over flow.
+- Snapshot health is now authoritative for its owner and is applied to the peer
+  actor on both sides, so both clients agree on who is down.
+- A living player within 2.5 units who holds Interact for 1.2 s revives them:
+  half of the giver's current health (rounded down) is transferred, the giver
+  must have at least 2 health and keep at least 1 afterwards. A `Revive` message
+  carries the target id and amount so the revived client restores its own
+  player.
+- Not yet verified with two clients. Party wipe, revive interruption and the
+  downed HUD are not implemented.
+
 ## Animation and door tether (2026-11-21)
 
 - Peer commands are now applied on both sides. The host still simulates the
