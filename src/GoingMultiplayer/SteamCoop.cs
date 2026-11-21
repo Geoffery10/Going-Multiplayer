@@ -28,6 +28,11 @@ namespace GoingMultiplayer
         private float lastCommand = -1f;
         private bool initialSyncSent;
         private string pendingScene;
+        private bool forcedBackground;
+        private float lastSceneBeat;
+        private float lastStats;
+        private int statCorrections;
+        private int statHard;
         private int remoteId;
         private NetworkActor remote;
         private bool kicked;
@@ -219,6 +224,19 @@ namespace GoingMultiplayer
             Player local = Player.singlePlayer;
             if (!local) return;
             float now = Time.realtimeSinceStartup;
+            if (isHost && now - lastSceneBeat >= 2f)
+            {
+                lastSceneBeat = now;
+                // Re-announce with the seed the current floor was built from, so
+                // a guest that reloads the scene regenerates the same layout.
+                session.SendScene(UnityEngine.SceneManagement.SceneManager
+                    .GetActiveScene().name, SceneSync.LastAppliedSeed, now);
+            }
+            if (now - lastStats >= 10f)
+            {
+                lastStats = now;
+                ReportStats(now);
+            }
             if (isHost && !initialSyncSent)
             {
                 initialSyncSent = true;
@@ -231,10 +249,10 @@ namespace GoingMultiplayer
                 }
                 string scene = UnityEngine.SceneManagement.SceneManager
                     .GetActiveScene().name;
-                int seed = SceneSync.NextSeed();
-                SceneSync.PendingSeed = seed;
+                int seed = SceneSync.LastAppliedSeed;
                 session.SendScene(scene, seed, now);
-                plugin.Report("GMP_COOP_SCENE_SEND name=" + scene + " seed=" + seed);
+                plugin.Report("GMP_COOP_SCENE_SEND name=" + scene + " seed=" + seed
+                    + " initial=True");
             }
             if (now - lastSnapshot >= 0.05f)
             {
@@ -261,6 +279,7 @@ namespace GoingMultiplayer
         {
             if (!SteamClient.IsValid) { status = "Steam is not ready."; return; }
             Stop();
+            KeepRunningInBackground();
             isHost = true;
             state = CoopState.Creating;
             lobby.Install();
@@ -270,11 +289,22 @@ namespace GoingMultiplayer
             plugin.Report("GMP_COOP_HOST_START build=" + build);
         }
 
+        private void KeepRunningInBackground()
+        {
+            // Online co-op must keep simulating while the window is out of
+            // focus, otherwise Steam callbacks, the session pump and the game
+            // itself freeze until the window is focused again.
+            if (Application.runInBackground) return;
+            Application.runInBackground = true;
+            forcedBackground = true;
+        }
+
         internal void Join(ulong lobbyId)
         {
             if (!SteamClient.IsValid) { status = "Steam is not ready."; return; }
             if (lobbyId == 0) { status = "No lobby id in the clipboard."; return; }
             Stop();
+            KeepRunningInBackground();
             isHost = false;
             state = CoopState.Joining;
             lobby.Install();
@@ -457,6 +487,7 @@ namespace GoingMultiplayer
                     transport.SetHost(lobby.Owner);
                     session.StartGuest(0, Time.realtimeSinceStartup);
                 }
+                KeepRunningInBackground();
                 state = CoopState.Running;
                 status = isHost ? "Hosting Steam co-op." : "Joined Steam co-op.";
                 plugin.Report("GMP_COOP_LOBBY " + LobbyId);
@@ -509,7 +540,14 @@ namespace GoingMultiplayer
                 transport = null;
             }
             if (!isHost) SessionSave.Restore(plugin.Report);
+            if (forcedBackground)
+            {
+                Application.runInBackground = false;
+                forcedBackground = false;
+            }
             initialSyncSent = false;
+            lastSceneBeat = 0f;
+            lastStats = 0f;
             pendingScene = null;
             ActorRegistry.Reset();
             remote = null;
@@ -517,6 +555,28 @@ namespace GoingMultiplayer
             state = CoopState.Idle;
             lastSnapshot = -1f;
             lastCommand = -1f;
+        }
+
+        private void ReportStats(float now)
+        {
+            int corrections = Reconciliation.Corrections - statCorrections;
+            int hard = Reconciliation.HardSnaps - statHard;
+            statCorrections = Reconciliation.Corrections;
+            statHard = Reconciliation.HardSnaps;
+            Peer peer = null;
+            foreach (Peer candidate in session.Peers.All) peer = candidate;
+            plugin.Report("GMP_COOP_STATS role=" + (isHost ? "host" : "guest")
+                + " scene=" + UnityEngine.SceneManagement.SceneManager
+                    .GetActiveScene().name
+                + " corrections=" + corrections
+                + " hard=" + hard
+                + " error=" + Reconciliation.LastError.ToString("F2",
+                    System.Globalization.CultureInfo.InvariantCulture)
+                + " rtt=" + (peer != null ? peer.RttMs.ToString("F0",
+                    System.Globalization.CultureInfo.InvariantCulture) : "none")
+                + " peers=" + session.Peers.Count
+                + " commands=" + session.CommandsReceived
+                + " focus=" + (Player.singlePlayer != null && Player.singlePlayer.focusing));
         }
 
         private static byte[] ReadSaveSlot()

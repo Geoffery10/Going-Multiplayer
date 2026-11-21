@@ -105,6 +105,10 @@ automatically once Steam is ready.
 
 ## Known limits
 
+- Only the host can change rooms/floors. If the guest takes a door, the host's
+  2-second scene heartbeat pulls them back rather than following.
+- The window can be unfocused: co-op keeps running (and so does the game).
+
 - No host-authoritative actions yet: attack, dodge, throw, interact, focus and
   inventory are still local.
 - No animation/weapon/effect replication; the remote character may slide.

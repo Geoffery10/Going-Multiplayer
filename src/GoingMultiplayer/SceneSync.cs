@@ -12,6 +12,7 @@ namespace GoingMultiplayer
     internal static class SceneSync
     {
         internal static int PendingSeed;
+        internal static int LastAppliedSeed;
         private static Harmony patches;
 
         internal static void Install()
@@ -33,6 +34,7 @@ namespace GoingMultiplayer
         {
             if (PendingSeed == 0) return;
             Random.InitState(PendingSeed);
+            LastAppliedSeed = PendingSeed;
             PendingSeed = 0;
         }
     }

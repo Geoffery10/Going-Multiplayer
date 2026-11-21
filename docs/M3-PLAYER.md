@@ -43,6 +43,19 @@ Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet
   fail as expected: `--negative command` (host ignores commands) and
   `--negative snapshot` (guest ignores host snapshots).
 
+## Background running and session health (2026-11-21)
+
+- `Host`/`Join` set `Application.runInBackground = true` and `Stop` restores it.
+  Without it Unity stops the player loop when the window loses focus, which
+  freezes Steam callbacks, the session pump and the game itself.
+- The host re-announces its scene every 2 s (with the seed the current floor was
+  built from). A guest that drifts to another scene — for example by taking a
+  door itself — is reloaded back to the host's scene instead of desyncing
+  forever. Host-initiated transitions still lead.
+- Every 10 s both sides log `GMP_COOP_STATS` (scene, corrections, hard snaps,
+  last error, RTT, peers, commands, focus) so the next session can tune
+  reconciliation from real numbers.
+
 ## Session save and scene sync (2026-11-21)
 
 - On join the host sends its active save file in reliable chunks. The guest
