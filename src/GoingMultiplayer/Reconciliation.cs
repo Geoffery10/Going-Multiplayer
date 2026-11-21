@@ -14,19 +14,26 @@ namespace GoingMultiplayer
     {
         internal const float Deadband = 0.75f;
         internal const float HardSnapDistance = 3f;
-        internal const float SoftFraction = 0.15f;
-        internal const float SoftMaxStep = 0.6f;
+        internal const float SoftSpeed = 8f;
+        internal const float MaxSpeed = 60f;
 
         internal static int Corrections;
         internal static int HardSnaps;
         internal static float LastError;
         internal static Vector3 LastAuthoritative;
 
+        private static Player glidePlayer;
+        private static Vector3 glideTarget;
+        private static float glideSpeed;
+        private static bool gliding;
+
         internal static void Reset()
         {
             Corrections = 0;
             HardSnaps = 0;
             LastError = 0f;
+            gliding = false;
+            glidePlayer = null;
         }
 
         internal static void Apply(Player local, PlayerSnapshot snapshot)
@@ -41,15 +48,35 @@ namespace GoingMultiplayer
 
             LastAuthoritative = authoritative;
             Corrections++;
-            if (error >= HardSnapDistance)
+            if (error >= HardSnapDistance) HardSnaps++;
+            // Glide instead of teleporting: a hard snap is visually a jump and a
+            // small step per snapshot looks like a stutter. Speed scales with the
+            // error so large corrections still finish fast.
+            glidePlayer = local;
+            glideTarget = authoritative;
+            glideSpeed = Mathf.Clamp(error * 6f, SoftSpeed, MaxSpeed);
+            gliding = true;
+        }
+
+        // Called once per frame while a correction is pending.
+        internal static void Tick(float deltaTime)
+        {
+            if (!gliding) return;
+            if (glidePlayer == null || !glidePlayer)
             {
-                HardSnaps++;
-                Move(local, authoritative, true);
+                gliding = false;
+                glidePlayer = null;
                 return;
             }
-            Vector3 next = Vector3.MoveTowards(current, authoritative,
-                Mathf.Min(error * SoftFraction, SoftMaxStep));
-            Move(local, next, false);
+            float step = glideSpeed * Mathf.Max(deltaTime, 0f);
+            Vector3 current = glidePlayer.transform.position;
+            Vector3 next = Vector3.MoveTowards(current, glideTarget, step);
+            Move(glidePlayer, next, false);
+            if (Vector3.Distance(next, glideTarget) < 0.05f)
+            {
+                gliding = false;
+                glidePlayer = null;
+            }
         }
 
         private static void Move(Player player, Vector3 position, bool zeroVelocity)

@@ -1,6 +1,6 @@
 # M3 player replication (started)
 
-Status: **foundation started**, v0.13.0, 2026-11-21. Not a playable M3 slice yet.
+Status: **foundation started**, v0.14.0, 2026-11-21. Not a playable M3 slice yet.
 
 ## Implemented foundation
 

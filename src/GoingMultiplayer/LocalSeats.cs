@@ -73,6 +73,10 @@ namespace GoingMultiplayer
                 "BarfOutItem", "BarfOutDeepPockets", "RemoveFromInventory", "ScrollInventorySlot" })
                 patches.Patch(AccessTools.Method(typeof(PlayerInventory), name),
                     prefix: Method("InventoryContext"), finalizer: Method("RestoreContext"));
+            // Players that are not the local one must never drive the shared
+            // CameraController: focus would snap the host's camera to a puppet.
+            patches.Patch(AccessTools.Method(typeof(Player), "UpdateFocus"),
+                prefix: Method("RemoteFocusGuard"));
             foreach (string name in new[] { "SetCostume", "RefreshCostume" })
                 patches.Patch(AccessTools.Method(typeof(PlayerView), name),
                     prefix: Method("ViewContext"), finalizer: Method("RestoreContext"));
@@ -233,6 +237,14 @@ namespace GoingMultiplayer
             seat.Player.view.SetCostume(seat.Costume);
         }
 
+        private static void RemoteFocusGuard(Player __instance)
+        {
+            Seat seat;
+            if (!Seats.TryGetValue(__instance, out seat)) return;
+            if (protectedLocal != null && __instance == protectedLocal) return;
+            __instance.blockFocusControls = true;
+        }
+
         private static bool DataGet(Player __instance, ref PlayerData __result)
         {
             Seat seat;
@@ -349,7 +361,7 @@ namespace GoingMultiplayer
             if (!Inputs.TryGetValue(__instance, out seat)) return true;
             if (seat.Network != null)
             {
-                __result = seat.Network.Command.Inventory;
+                __result = seat.Network.Inventory();
                 return false;
             }
             if (seat.Pad != null)

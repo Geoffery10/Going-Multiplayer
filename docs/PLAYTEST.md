@@ -1,6 +1,6 @@
 # M2/M3 playtest guide
 
-Status: **internal playtest build**, v0.13.0. This is the first in-game Steam
+Status: **internal playtest build**, v0.14.0. This is the first in-game Steam
 co-op path. It is not a finished co-op run.
 
 ## What the build currently does
@@ -30,8 +30,23 @@ Both players need the same game build and plugin build.
 - Both should load into the office before judging whether the other is visible.
 
 If the Co-op tab is missing, check `BepInEx/LogOutput.log` for
-`GMP_LOADER_LOADED version=0.13.0` and `GMP_COOP_TAB installed`. If those lines
+`GMP_LOADER_LOADED version=0.14.0 networking=steam_coop` and `GMP_COOP_TAB installed`. If those lines
 are absent, the running copy is not the modded one.
+
+## Friend test kit (Windows)
+
+The plugin, BepInEx core, Doorstop and a short `INSTALL.txt` are packed as
+`artifacts/GoingMultiplayer-0.14.0-win64.zip` (716 KB, 25 files). The zip root
+is the game folder: `winhttp.dll`, `.doorstop_version`, `doorstop_config.ini`,
+`BepInEx/core/*`, `BepInEx/plugins/GoingMultiplayer/GoingMultiplayer.dll`.
+
+The kit is built from the local, already-verified install; no game files or
+save data are included. The session compares the plugin DLL SHA-256, so both
+sides must use the same zip.
+
+Ask the guest for their `BepInEx/LogOutput.log` (whole file, unedited) and a
+screenshot of the Co-op tab. The loader line to confirm is
+`GMP_LOADER_LOADED version=0.14.0 networking=steam_coop`.
 
 ## Test save
 

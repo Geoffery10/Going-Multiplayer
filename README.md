@@ -6,7 +6,7 @@ Co-op mod research and development for Going Under.
 networking, enemy targeting, native enemy-movement mirroring, scoped
 electric-attack health replication, host-authoritative guest movement input,
 a standalone Steam-adapter harness, a persistent session core, the first Steam
-transport/lobby integration and the M3 input/view foundation (v0.13.0; M2/M3
+transport/lobby integration and the M3 input/view foundation (v0.14.0; M2/M3
 in progress). Not a playable online co-op release.**
 
 ## Project status

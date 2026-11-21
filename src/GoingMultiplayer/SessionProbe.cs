@@ -65,6 +65,9 @@ namespace GoingMultiplayer
             session.CommandReceived += delegate(Peer peer, InputCommand command)
             {
                 if (!isHost || commandNegative) return;
+                if (command.Inventory != 0)
+                    plugin.Report("GMP_SESSION_INV_CMD role=" + role
+                        + " seq=" + peer.LastSequence + " inv=" + command.Inventory);
                 NetworkActor target = ActorRegistry.Get(peer.PlayerId);
                 if (target != null && target.Seat != null && target.Seat.Network != null)
                     target.Seat.Network.Apply(command, peer.LastSequence);
@@ -239,6 +242,96 @@ namespace GoingMultiplayer
             if (!isHost) session.SendCommand(new InputCommand(),
                 Time.realtimeSinceStartup);
 
+            // M3a focus gate: the guest's press must focus the host's actor,
+            // and the host camera must not move. Remote actors are barred from
+            // driving the shared CameraController.
+            Vector3 cameraBefore = Camera.main != null
+                && Camera.main.transform != null
+                ? Camera.main.transform.position : Vector3.zero;
+            bool focusHost = false;
+            bool focusLocal = false;
+            int focusAttempts = 0;
+            float lastFocus = -2f;
+            float focusEnd = Time.realtimeSinceStartup + 2f;
+            while (Time.realtimeSinceStartup < focusEnd)
+            {
+                float focusNow = Time.realtimeSinceStartup;
+                if (!isHost && focusNow - lastFocus >= 0.5f)
+                {
+                    session.SendCommand(new InputCommand
+                    {
+                        Held = PlayerButtons.Focus,
+                        Pressed = PlayerButtons.Focus,
+                    }, focusNow);
+                    lastFocus = focusNow;
+                    focusAttempts++;
+                }
+                Pump(session);
+                if (hostActor) focusHost |= hostActor.focusing;
+                focusLocal |= local.focusing;
+                if (focusHost) break;
+                if (!isHost && focusAttempts >= 4) break;
+                yield return null;
+            }
+            if (!isHost) session.SendCommand(new InputCommand(),
+                Time.realtimeSinceStartup);
+            float cameraDelta = Camera.main != null && Camera.main.transform != null
+                ? Vector3.Distance(cameraBefore, Camera.main.transform.position) : 0f;
+            plugin.Report("GMP_SESSION_FOCUS role=" + role
+                + " focus_host=" + focusHost + " focus_local=" + focusLocal
+                + " cam_delta=" + Fmt(cameraDelta)
+                + " attempts=" + focusAttempts);
+
+            // M3a inventory gate: one step on the guest must scroll the host's
+            // actor, not the guest's own inventory. Wait for the previous swing
+            // to finish first; inventory is blocked while attacking.
+            for (float clean = Time.realtimeSinceStartup + 3f;
+                Time.realtimeSinceStartup < clean && hostActor != null
+                && (hostActor.charging || hostActor.view.attacking);)
+            {
+                Pump(session);
+                yield return null;
+            }
+            int invBefore = hostActor ? hostActor.data.inventory.currentInventoryIndex : -1;
+            int invLocalBefore = local.data.inventory.currentInventoryIndex;
+            int invCommandBefore = session.CommandsReceived;
+            if (!isHost)
+            {
+                session.SendCommand(new InputCommand { Inventory = 1 },
+                    Time.realtimeSinceStartup);
+                plugin.Report("GMP_SESSION_INV_SEND inv=1 seq="
+                    + session.LastCommandSequence);
+            }
+            int invReadsBefore = NetworkInputState.InventoryReads;
+            int invHitsBefore = NetworkInputState.InventoryHits;
+            int invSeen = 0;
+            for (float invEnd = Time.realtimeSinceStartup + 0.6f;
+                Time.realtimeSinceStartup < invEnd;)
+            {
+                Pump(session);
+                if (hostActor && remote.Seat.Network != null)
+                    invSeen = Mathf.Max(invSeen, remote.Seat.Network.Command.Inventory);
+                yield return null;
+            }
+            if (!isHost) session.SendCommand(new InputCommand(),
+                Time.realtimeSinceStartup);
+            int invAfter = hostActor ? hostActor.data.inventory.currentInventoryIndex : -1;
+            int invLocalAfter = local.data.inventory.currentInventoryIndex;
+            bool invMoved = hostActor != null && invAfter != invBefore;
+            bool invLocalMoved = invLocalAfter != invLocalBefore;
+            plugin.Report("GMP_SESSION_INV role=" + role + " inv_host=" + invAfter
+                + " moved=" + invMoved + " local=" + invLocalAfter
+                + " local_moved=" + invLocalMoved
+                + " charging=" + (hostActor != null && hostActor.charging)
+                + " attacking=" + (hostActor != null && hostActor.view.attacking)
+                + " can_swap=" + (hostActor != null && hostActor.canSwapInventory)
+                + " inv_cmd=" + (session.CommandsReceived - invCommandBefore)
+                + " inv_seen=" + invSeen
+                + " inv_reads=" + (NetworkInputState.InventoryReads - invReadsBefore)
+                + " inv_hits=" + (NetworkInputState.InventoryHits - invHitsBefore)
+                + " controls_blocked=" + (hostActor != null && hostActor.controlsBlocked)
+                + " force_single=" + (hostActor != null && hostActor.forceSingleItem));
+
             // M3a reconciliation gate: the guest keeps its local player still
             // while still commanding the host to walk, so the two poses diverge.
             // The host's authoritative snapshots must pull the guest back.
@@ -273,6 +366,9 @@ namespace GoingMultiplayer
                 ? Vector3.Distance(local.transform.position, Reconciliation.LastAuthoritative)
                 : XZDistance(local.transform.position, drift);
             plugin.Report("GMP_SESSION_RECON role=" + role
+                + " focus_host=" + focusHost + " focus_local=" + focusLocal
+                + " cam_delta=" + Fmt(cameraDelta)
+                + " inv_moved=" + invMoved + " inv_local_moved=" + invLocalMoved
                 + " recon_delta=" + Fmt(reconDelta)
                 + " corrections=" + reconCorrections
                 + " hard=" + reconHard
@@ -384,7 +480,8 @@ namespace GoingMultiplayer
                 && dungeonDelta > 0.05f
                 && (isHost
                     ? hostSawAttack && actionReceived >= 1
-                    : !localSawAttack && actionSent >= 1)
+                        && focusHost && cameraDelta <= 0.05f
+                    : !localSawAttack && actionSent >= 1 && !focusLocal)
                 && (isHost || (reconCorrections >= 1 && reconError <= 0.5f));
             plugin.Report("GMP_SESSION_RESULT " + (pass ? "PASS" : "FAIL")
                 + " run=" + runId + " role=" + role
@@ -404,6 +501,9 @@ namespace GoingMultiplayer
                 + " attack_host=" + hostSawAttack
                 + " attack_local=" + localSawAttack
                 + " cmd_sent=" + actionSent + " cmd_recv=" + actionReceived
+                + " focus_host=" + focusHost + " focus_local=" + focusLocal
+                + " cam_delta=" + Fmt(cameraDelta)
+                + " inv_moved=" + invMoved + " inv_local_moved=" + invLocalMoved
                 + " recon_delta=" + Fmt(reconDelta)
                 + " recon_corrections=" + reconCorrections
                 + " recon_hard=" + reconHard
@@ -429,6 +529,8 @@ namespace GoingMultiplayer
                 + " rejected=" + session.Rejected + " stale=" + session.Stale
                 + " remote_delta=0 dungeon_delta=0 actor_alive=False health_kept=False"
                 + " attack_host=False attack_local=False cmd_sent=0 cmd_recv=0"
+                + " focus_host=False focus_local=False cam_delta=0"
+                + " inv_moved=False inv_local_moved=False"
                 + " recon_delta=0 recon_corrections=0 recon_hard=0 recon_error=0"
                 + " view_ok=False ready_barrier=False done_barrier=False"
                 + " negative=" + (Array.IndexOf(Environment.GetCommandLineArgs(),

@@ -15,6 +15,8 @@ namespace GoingMultiplayer
         // Current game frame, advanced by Plugin.Update. Kept out of UnityEngine
         // so the core stays compilable in the plain .NET test harness.
         internal static int Frame;
+        internal static int InventoryReads;
+        internal static int InventoryHits;
 
         internal InputCommand Command;
         internal uint LastSequence;
@@ -87,18 +89,21 @@ namespace GoingMultiplayer
         // frame the command stays current.
         internal int Inventory()
         {
+            InventoryReads++;
             int value = Command.Inventory;
             if (value == 0) return 0;
             int slot = ButtonSlots - 1;
             if (inventoryFrame == Frame)
             {
                 inventorySeen = true;
+                InventoryHits++;
                 return value;
             }
             if (!inventorySeen)
             {
                 inventoryFrame = Frame;
                 inventorySeen = true;
+                InventoryHits++;
                 return value;
             }
             inventoryFrame = -1;

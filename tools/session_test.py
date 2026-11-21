@@ -25,6 +25,8 @@ RESULT = re.compile(
     r"dungeon_delta=([-\d.]+) actor_alive=(True|False) "
     r"health_kept=(True|False) attack_host=(True|False) "
     r"attack_local=(True|False) cmd_sent=(\d+) cmd_recv=(\d+) "
+    r"focus_host=(True|False) focus_local=(True|False) "
+    r"cam_delta=([-\d.]+) inv_moved=(True|False) inv_local_moved=(True|False) "
     r"recon_delta=([-\d.]+) recon_corrections=(\d+) recon_hard=(\d+) "
     r"recon_error=([-\d.]+) view_ok=(True|False) "
     r"ready_barrier=(True|False) done_barrier=(True|False) "
@@ -38,6 +40,7 @@ def parse(text, run_id):
     (status, run, role, session, epoch, local_id, remote_id, peers, sent,
      received, rejected, stale, remote_delta, dungeon_delta, actor_alive,
      health_kept, attack_host, attack_local, cmd_sent, cmd_recv,
+     focus_host, focus_local, cam_delta, inv_moved, inv_local_moved,
      recon_delta, recon_corrections, recon_hard, recon_error,
      view_ok, ready_barrier, done_barrier, negative, scene) = matches[0]
     if run != run_id:
@@ -52,6 +55,11 @@ def parse(text, run_id):
         "health_kept": health_kept == "True",
         "attack_host": attack_host == "True",
         "attack_local": attack_local == "True",
+        "focus_host": focus_host == "True",
+        "focus_local": focus_local == "True",
+        "cam_delta": float(cam_delta),
+        "inv_moved": inv_moved == "True",
+        "inv_local_moved": inv_local_moved == "True",
         "recon_delta": float(recon_delta),
         "recon_corrections": int(recon_corrections),
         "recon_hard": int(recon_hard),
@@ -125,6 +133,8 @@ def score_pair(host_text, guest_text, run_id, host_result, guest_result, negativ
             and host["attack_host"] and host["cmd_recv"] >= 1
             and guest["cmd_sent"] >= 1 and not guest["attack_local"]
             and not host["attack_local"]
+            and host["focus_host"] and host["cam_delta"] <= 0.05
+            and not guest["focus_local"]
             and guest["recon_corrections"] >= 1 and guest["recon_error"] <= 0.5)
 
 
