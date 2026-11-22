@@ -55,8 +55,14 @@ Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet
   must have at least 2 health and keep at least 1 afterwards. A `Revive` message
   carries the target id and amount so the revived client restores its own
   player.
-- Not yet verified with two clients. Party wipe, revive interruption and the
-  downed HUD are not implemented.
+- Downed HUD: the downed player sees "You are down", the rescuer sees "Hold
+  Interact to revive" with a progress bar. Reviving plays the heart poof.
+- Party wipe: if the host and the peer are both down for 4 s, the host hands the
+  run back to the game's own death flow (`TriggerDeath` with the revive guard
+  disabled), which ends the run; the guest follows the scene change.
+- Revive amounts are clamped to the target's max health and ignored unless the
+  target is actually down. There is still no host-side validation of the giver's
+  distance or health (friends-only v1).
 
 ## Animation and door tether (2026-11-21)
 

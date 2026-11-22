@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 
 namespace GoingMultiplayer
 {
-    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.16.0")]
+    [BepInPlugin("goingmultiplayer.core", "Going Multiplayer", "0.16.1")]
     public sealed class Plugin : BaseUnityPlugin
     {
         private bool showStatus;
@@ -46,7 +46,7 @@ namespace GoingMultiplayer
 
         private void Awake()
         {
-            Logger.LogInfo("GMP_LOADER_LOADED version=0.16.0 networking=steam_coop");
+            Logger.LogInfo("GMP_LOADER_LOADED version=0.16.1 networking=steam_coop");
             smokeMode = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-smoke") >= 0;
             startupProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-startup-probe") >= 0;
             seatProbe = Array.IndexOf(Environment.GetCommandLineArgs(), "-gmp-seat-probe") >= 0;
@@ -433,6 +433,7 @@ namespace GoingMultiplayer
         private void OnGUI()
         {
             if (showCoop && coop != null) coop.DrawGui();
+            SessionRevive.DrawGui();
             if (!showStatus) return;
             GUI.Box(new Rect(20, 20, 600, 205), "Going Multiplayer — experimental local prototype");
             GUI.Label(new Rect(35, 50, 410, 25), "Online co-op is NOT implemented in this build.");

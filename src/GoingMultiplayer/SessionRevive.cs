@@ -16,7 +16,18 @@ namespace GoingMultiplayer
         internal const float MinGiverHealth = 2f;
 
         private static float holdTime;
+        private static float wipeTime;
         private static Harmony patches;
+
+        internal static bool NearDowned { get; private set; }
+        internal static float HoldProgress
+        {
+            get { return Mathf.Clamp01(holdTime / HoldSeconds); }
+        }
+        internal static bool SelfDown
+        {
+            get { return IsDown(Player.singlePlayer); }
+        }
 
         internal static void Install()
         {
@@ -75,7 +86,8 @@ namespace GoingMultiplayer
             bool canGive = local.health >= MinGiverHealth;
             float distance = Vector3.Distance(local.transform.position,
                 partner.transform.position);
-            bool holding = down && canGive && distance <= ReviveRange
+            NearDowned = down && canGive && distance <= ReviveRange;
+            bool holding = NearDowned
                 && local.input != null && local.input.InteractHeld();
             if (!holding)
             {
@@ -91,12 +103,84 @@ namespace GoingMultiplayer
             if (local.health - give < 1f) return;
             local.health -= give;
             Revive(partner, give);
+            Feedback(partner);
             if (sendRevive != null) sendRevive(partnerId, give);
+        }
+
+        // The host ends the run when nobody is left standing.
+        internal static void TickWipe(Player local, Player partner, bool isHost,
+            System.Action wipe)
+        {
+            if (!Active || !isHost || local == null || !local)
+            {
+                wipeTime = 0f;
+                return;
+            }
+            bool allDown = IsDown(local) && (partner == null || !partner || IsDown(partner));
+            if (!allDown)
+            {
+                wipeTime = 0f;
+                return;
+            }
+            wipeTime += Time.deltaTime;
+            if (wipeTime < 4f) return;
+            wipeTime = 0f;
+            if (wipe != null) wipe();
+        }
+
+        // Party wipe: hand the run back to the game's own death flow.
+        internal static void ForceDeath(Player player)
+        {
+            if (player == null || !player) return;
+            Active = false;
+            holdTime = 0f;
+            NearDowned = false;
+            try { player.TriggerDeath(new KillInfo(player, null)); }
+            catch (System.Exception) { }
+        }
+
+        private static void Feedback(Player player)
+        {
+            try
+            {
+                if (ParticleManager.instance != null)
+                    ParticleManager.instance.PlayPoofHeart(player.GetCenter());
+            }
+            catch (System.Exception) { }
+        }
+
+        internal static void DrawGui()
+        {
+            if (!Active) return;
+            float scale = Screen.height / 720f;
+            if (scale <= 0f) scale = 1f;
+            Matrix4x4 saved = GUI.matrix;
+            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity,
+                new Vector3(scale, scale, 1f));
+            float width = Screen.width / scale;
+            if (SelfDown)
+            {
+                GUI.Box(new Rect(width * 0.5f - 220f, 560f, 440f, 48f),
+                    "You are down - a teammate can hold Interact to revive you");
+            }
+            else if (NearDowned)
+            {
+                Rect panel = new Rect(width * 0.5f - 200f, 560f, 400f, 62f);
+                GUI.Box(panel, "Hold Interact to revive");
+                float bar = Mathf.Clamp01(HoldProgress);
+                GUI.Box(new Rect(panel.x + 20f, panel.y + 32f, panel.width - 40f, 18f), "");
+                if (bar > 0f)
+                    GUI.Box(new Rect(panel.x + 20f, panel.y + 32f,
+                        (panel.width - 40f) * bar, 18f), "");
+            }
+            GUI.matrix = saved;
         }
 
         internal static void Reset()
         {
             holdTime = 0f;
+            wipeTime = 0f;
+            NearDowned = false;
             Active = false;
         }
     }

@@ -229,6 +229,11 @@ namespace GoingMultiplayer
             float now = Time.realtimeSinceStartup;
             SessionRevive.Active = true;
             Player partner = remote != null && remote.Seat != null ? remote.Seat.Player : null;
+            SessionRevive.TickWipe(local, partner, isHost, delegate
+            {
+                plugin.Report("GMP_COOP_WIPE");
+                SessionRevive.ForceDeath(Player.singlePlayer);
+            });
             SessionRevive.Tick(local, partner, remoteId,
                 delegate(int id, float amount)
                 {
@@ -529,7 +534,10 @@ namespace GoingMultiplayer
                 session.ReviveReceived += delegate(int targetId, float amount)
                 {
                     if (session == null || targetId != session.LocalPlayerId) return;
-                    SessionRevive.Revive(Player.singlePlayer, amount);
+                    Player me = Player.singlePlayer;
+                    if (!SessionRevive.IsDown(me)) return;
+                    amount = Mathf.Min(amount, me.MaxHealth);
+                    SessionRevive.Revive(me, amount);
                     plugin.Report("GMP_COOP_REVIVED amount=" + amount.ToString("F0",
                         Culture));
                 };
