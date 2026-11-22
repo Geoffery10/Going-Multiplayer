@@ -60,9 +60,12 @@ Status: **foundation started**, v0.15.0, 2026-11-21. Not a playable M3 slice yet
 - Party wipe: if the host and the peer are both down for 4 s, the host hands the
   run back to the game's own death flow (`TriggerDeath` with the revive guard
   disabled), which ends the run; the guest follows the scene change.
-- Revive amounts are clamped to the target's max health and ignored unless the
-  target is actually down. There is still no host-side validation of the giver's
-  distance or health (friends-only v1).
+- Revives are host-authoritative: a guest sends `ReviveRequest`, the host
+  validates (target down, giver at least 2 health, within 3 units, giver keeps
+  at least 1) and broadcasts a `Revive` result carrying giver, target and
+  amount. The giver's client deducts, the target's client resurrects.
+- Taking damage cancels a revive hold. The revived player plays the `Yay`
+  trigger plus the heart poof.
 
 ## Animation and door tether (2026-11-21)
 

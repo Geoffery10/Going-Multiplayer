@@ -17,6 +17,7 @@ namespace GoingMultiplayer
 
         private static float holdTime;
         private static float wipeTime;
+        private static float lastHealth = -1f;
         private static Harmony patches;
 
         internal static bool NearDowned { get; private set; }
@@ -65,7 +66,12 @@ namespace GoingMultiplayer
             player.health = restored;
             player.overHealth = 0f;
             PlayerView view = player.view;
-            if (view != null && view.anim != null) view.anim.SetBool("Prone", false);
+            if (view != null && view.anim != null)
+            {
+                view.anim.SetBool("Prone", false);
+                view.anim.SetTrigger("Yay");
+            }
+            Feedback(player);
         }
 
         internal static bool IsDown(Player player)
@@ -75,13 +81,17 @@ namespace GoingMultiplayer
 
         // Called every frame on the client that owns the local player.
         internal static void Tick(Player local, Player partner, int partnerId,
-            System.Action<int, float> sendRevive)
+            System.Action<int> requestRevive)
         {
             if (!Active || local == null || !local || partner == null || !partner)
             {
                 holdTime = 0f;
                 return;
             }
+            // Taking damage cancels a revive in progress.
+            if (lastHealth >= 0f && local.health < lastHealth) holdTime = 0f;
+            lastHealth = local.health;
+
             bool down = IsDown(partner);
             bool canGive = local.health >= MinGiverHealth;
             float distance = Vector3.Distance(local.transform.position,
@@ -98,13 +108,8 @@ namespace GoingMultiplayer
             if (holdTime < HoldSeconds) return;
             holdTime = 0f;
 
-            float give = Mathf.Floor(local.health * 0.5f);
-            if (give < 1f) give = 1f;
-            if (local.health - give < 1f) return;
-            local.health -= give;
-            Revive(partner, give);
-            Feedback(partner);
-            if (sendRevive != null) sendRevive(partnerId, give);
+            // The host validates and applies; a guest asks the host to do it.
+            if (requestRevive != null) requestRevive(partnerId);
         }
 
         // The host ends the run when nobody is left standing.
@@ -180,6 +185,7 @@ namespace GoingMultiplayer
         {
             holdTime = 0f;
             wipeTime = 0f;
+            lastHealth = -1f;
             NearDowned = false;
             Active = false;
         }

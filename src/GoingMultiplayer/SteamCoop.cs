@@ -234,13 +234,15 @@ namespace GoingMultiplayer
                 plugin.Report("GMP_COOP_WIPE");
                 SessionRevive.ForceDeath(Player.singlePlayer);
             });
-            SessionRevive.Tick(local, partner, remoteId,
-                delegate(int id, float amount)
+            SessionRevive.Tick(local, partner, remoteId, delegate(int targetId)
+            {
+                if (isHost) ApplyRevive(session.LocalPlayerId, targetId);
+                else
                 {
-                    session.SendRevive(id, amount, Time.realtimeSinceStartup);
-                    plugin.Report("GMP_COOP_REVIVE_SEND target=" + id
-                        + " amount=" + amount.ToString("F0", Culture));
-                });
+                    session.SendReviveRequest(targetId, Time.realtimeSinceStartup);
+                    plugin.Report("GMP_COOP_REVIVE_REQUEST target=" + targetId);
+                }
+            });
             if (isHost && now - lastSceneBeat >= 2f)
             {
                 lastSceneBeat = now;
@@ -531,15 +533,27 @@ namespace GoingMultiplayer
                     if (seed != 0) SceneSync.PendingSeed = seed;
                     ApplyHostScene(scene);
                 };
-                session.ReviveReceived += delegate(int targetId, float amount)
+                session.ReviveReceived += delegate(int giverId, int targetId, float amount)
                 {
-                    if (session == null || targetId != session.LocalPlayerId) return;
+                    if (session == null) return;
                     Player me = Player.singlePlayer;
-                    if (!SessionRevive.IsDown(me)) return;
-                    amount = Mathf.Min(amount, me.MaxHealth);
-                    SessionRevive.Revive(me, amount);
-                    plugin.Report("GMP_COOP_REVIVED amount=" + amount.ToString("F0",
-                        Culture));
+                    if (me == null) return;
+                    float clamped = Mathf.Min(amount, me.MaxHealth);
+                    if (giverId == session.LocalPlayerId)
+                        me.health = Mathf.Max(1f, me.health - clamped);
+                    if (targetId == session.LocalPlayerId && SessionRevive.IsDown(me))
+                    {
+                        SessionRevive.Revive(me, clamped);
+                        plugin.Report("GMP_COOP_REVIVED amount="
+                            + clamped.ToString("F0", Culture));
+                    }
+                };
+                session.ReviveRequestReceived += delegate(Peer peer, int targetId)
+                {
+                    if (!isHost) return;
+                    plugin.Report("GMP_COOP_REVIVE_REQUEST peer=" + peer.PlayerId
+                        + " target=" + targetId);
+                    ApplyRevive(peer.PlayerId, targetId);
                 };
                 session.TeleportReceived += delegate(float dx, float dy, float dz)
                 {
@@ -704,6 +718,56 @@ namespace GoingMultiplayer
 
         private static readonly System.Globalization.CultureInfo Culture =
             System.Globalization.CultureInfo.InvariantCulture;
+
+        // Host-side authority for a revive: validate range and health, then move
+        // half of the giver's health to the downed player and tell the peers.
+        private void ApplyRevive(int giverId, int targetId)
+        {
+            if (session == null || session.State != SessionState.Playing) return;
+            Player giver = ResolvePlayer(giverId);
+            Player target = ResolvePlayer(targetId);
+            if (giver == null || target == null)
+            {
+                plugin.Report("GMP_COOP_REVIVE_REJECT reason=player");
+                return;
+            }
+            if (!SessionRevive.IsDown(target))
+            {
+                plugin.Report("GMP_COOP_REVIVE_REJECT reason=target_up");
+                return;
+            }
+            if (giver.health < SessionRevive.MinGiverHealth)
+            {
+                plugin.Report("GMP_COOP_REVIVE_REJECT reason=giver_hurt");
+                return;
+            }
+            if (Vector3.Distance(giver.transform.position, target.transform.position)
+                > SessionRevive.ReviveRange + 0.5f)
+            {
+                plugin.Report("GMP_COOP_REVIVE_REJECT reason=range");
+                return;
+            }
+            float give = Mathf.Floor(giver.health * 0.5f);
+            if (give < 1f) give = 1f;
+            if (giver.health - give < 1f)
+            {
+                plugin.Report("GMP_COOP_REVIVE_REJECT reason=would_die");
+                return;
+            }
+            giver.health -= give;
+            SessionRevive.Revive(target, give);
+            session.SendRevive(giverId, targetId, give, Time.realtimeSinceStartup);
+            plugin.Report("GMP_COOP_REVIVE_SEND giver=" + giverId + " target=" + targetId
+                + " amount=" + give.ToString("F0", Culture));
+        }
+
+        private Player ResolvePlayer(int playerId)
+        {
+            if (session != null && playerId == session.LocalPlayerId)
+                return Player.singlePlayer;
+            NetworkActor actor = ActorRegistry.Get(playerId);
+            return actor != null && actor.Seat != null ? actor.Seat.Player : null;
+        }
 
         private static void Move(Player player, Vector3 position)
         {

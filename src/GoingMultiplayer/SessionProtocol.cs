@@ -26,6 +26,7 @@ namespace GoingMultiplayer
         SceneIntent = 13,
         Teleport = 14,
         Revive = 15,
+        ReviveRequest = 16,
     }
 
     internal struct PlayerSnapshot
@@ -313,18 +314,21 @@ namespace GoingMultiplayer
         }
 
         internal static byte[] Revive(ushort protocol, uint epoch, int playerId,
-            uint sequence, int targetId, float amount)
+            uint sequence, int giverId, int targetId, float amount)
         {
             return Build(MessageType.Revive, protocol, epoch, playerId, sequence,
                 delegate(BinaryWriter writer)
                 {
+                    writer.Write(giverId);
                     writer.Write(targetId);
                     writer.Write(amount);
                 });
         }
 
-        internal static bool TryRevive(byte[] data, out int targetId, out float amount)
+        internal static bool TryRevive(byte[] data, out int giverId, out int targetId,
+            out float amount)
         {
+            giverId = 0;
             targetId = 0;
             amount = 0f;
             try
@@ -332,10 +336,35 @@ namespace GoingMultiplayer
                 using (var reader = OpenBody(data, MessageType.Revive))
                 {
                     if (reader == null) return false;
+                    giverId = reader.ReadInt32();
                     targetId = reader.ReadInt32();
                     amount = reader.ReadSingle();
-                    return targetId > 0 && amount > 0f && amount < 1000f
+                    return giverId > 0 && targetId > 0 && giverId != targetId
+                        && amount > 0f && amount < 1000f
                         && !float.IsNaN(amount) && !float.IsInfinity(amount);
+                }
+            }
+            catch (IOException) { return false; }
+            catch (ArgumentException) { return false; }
+        }
+
+        internal static byte[] ReviveRequest(ushort protocol, uint epoch, int playerId,
+            uint sequence, int targetId)
+        {
+            return Build(MessageType.ReviveRequest, protocol, epoch, playerId, sequence,
+                delegate(BinaryWriter writer) { writer.Write(targetId); });
+        }
+
+        internal static bool TryReviveRequest(byte[] data, out int targetId)
+        {
+            targetId = 0;
+            try
+            {
+                using (var reader = OpenBody(data, MessageType.ReviveRequest))
+                {
+                    if (reader == null) return false;
+                    targetId = reader.ReadInt32();
+                    return targetId > 0;
                 }
             }
             catch (IOException) { return false; }
@@ -760,7 +789,8 @@ namespace GoingMultiplayer
         internal Action<string, int> SceneReceived = delegate { };
         internal Action<string> SceneIntentReceived = delegate { };
         internal Action<float, float, float> TeleportReceived = delegate { };
-        internal Action<int, float> ReviveReceived = delegate { };
+        internal Action<int, int, float> ReviveReceived = delegate { };
+        internal Action<Peer, int> ReviveRequestReceived = delegate { };
         internal Action<SessionState> StateChanged = delegate { };
         internal Action<Peer> Kicked = delegate { };
 
@@ -870,12 +900,22 @@ namespace GoingMultiplayer
         // A guest that opened a door itself asks the host to take the party
         // through the same transition instead of being pulled back.
         // Scripted moves (special doors, elevators) must take the whole party.
-        internal void SendRevive(int targetId, float amount, double now)
+        internal void SendRevive(int giverId, int targetId, float amount, double now)
         {
             if (State != SessionState.Playing) return;
             sequence++;
             byte[] data = SessionCodec.Revive(config.ProtocolVersion, Epoch,
-                LocalPlayerId, sequence, targetId, amount);
+                LocalPlayerId, sequence, giverId, targetId, amount);
+            foreach (Peer peer in Peers.All)
+                if (peer.Connected) transport.Send(peer.Key, data, true);
+        }
+
+        internal void SendReviveRequest(int targetId, double now)
+        {
+            if (State != SessionState.Playing) return;
+            sequence++;
+            byte[] data = SessionCodec.ReviveRequest(config.ProtocolVersion, Epoch,
+                LocalPlayerId, sequence, targetId);
             foreach (Peer peer in Peers.All)
                 if (peer.Connected) transport.Send(peer.Key, data, true);
         }
@@ -1116,14 +1156,25 @@ namespace GoingMultiplayer
             }
             else if (type == MessageType.Revive)
             {
-                int targetId;
+                int giverId, targetId;
                 float amount;
-                if (!SessionCodec.TryRevive(packet.Data, out targetId, out amount))
+                if (!SessionCodec.TryRevive(packet.Data, out giverId, out targetId,
+                    out amount))
                 {
                     Rejected++;
                     return;
                 }
-                if (ReviveReceived != null) ReviveReceived(targetId, amount);
+                if (ReviveReceived != null) ReviveReceived(giverId, targetId, amount);
+            }
+            else if (type == MessageType.ReviveRequest)
+            {
+                int targetId;
+                if (!SessionCodec.TryReviveRequest(packet.Data, out targetId))
+                {
+                    Rejected++;
+                    return;
+                }
+                if (ReviveRequestReceived != null) ReviveRequestReceived(peer, targetId);
             }
             else if (type == MessageType.Command)
             {
